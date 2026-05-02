@@ -25,7 +25,6 @@ SQLite and local files persist app state so the demo survives refreshes and rest
 .
 ├── apps/
 │   ├── api/
-│   │   ├── .env.example
 │   │   ├── package.json
 │   │   └── src/index.ts
 │   └── web/
@@ -36,6 +35,7 @@ SQLite and local files persist app state so the demo survives refreshes and rest
 │   ├── app.db
 │   ├── generated/
 │   └── uploads/
+├── .env.example
 ├── package.json
 ├── pnpm-workspace.yaml
 └── tsconfig.base.json
@@ -62,11 +62,14 @@ pnpm install
 
 ### Backend
 
-Use `apps/api/.env.example` as the reference for backend settings.
+Use the root `.env.example` file as the reference for backend settings. Put local values in the repository root `.env` file.
 
-Important: the current `pnpm dev` script does not auto-load `apps/api/.env`, so either:
-- export environment variables in your shell before running the app, or
-- rely on the built-in defaults in `apps/api/src/index.ts` for local mock mode.
+The API auto-loads the root `.env` at startup, including when you run `pnpm dev` from the repository root.
+
+Precedence rules:
+- existing system environment variables win
+- root `.env` fills in missing keys only
+- if root `.env` is missing, or `AUTH_MODE` / `GENERATION_MODE` are unset, the API keeps its built-in mock defaults
 
 Runtime keys used by the API:
 - `PORT`: API port. Default `3001`.

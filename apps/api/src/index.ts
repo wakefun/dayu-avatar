@@ -166,7 +166,10 @@ type GeneratedImagePayload = {
   height: number;
 };
 
-const repoRoot = path.resolve(process.cwd(), '../..');
+const apiRoot = path.resolve(__dirname, '..');
+const repoRoot = path.resolve(apiRoot, '../..');
+loadEnvFile(path.join(repoRoot, '.env'));
+
 const dataRoot = path.join(repoRoot, 'data');
 const uploadsRoot = path.join(dataRoot, 'uploads');
 const generatedRoot = path.join(dataRoot, 'generated');
@@ -2490,6 +2493,116 @@ function destroySession(req: Request) {
       resolve();
     });
   });
+}
+
+function loadEnvFile(envFilePath: string) {
+  let fileContents: string;
+
+  try {
+    fileContents = fs.readFileSync(envFilePath, 'utf8');
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      return;
+    }
+    throw error;
+  }
+
+  for (const [key, value] of parseEnvFile(fileContents)) {
+    if (process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
+}
+
+function parseEnvFile(contents: string) {
+  const values = new Map<string, string>();
+  const normalizedContents = contents.replace(/^\uFEFF/, '');
+
+  for (const rawLine of normalizedContents.split(/\r?\n/)) {
+    const trimmedLine = rawLine.trim();
+    if (!trimmedLine || trimmedLine.startsWith('#')) {
+      continue;
+    }
+
+    const separatorIndex = rawLine.indexOf('=');
+    if (separatorIndex <= 0) {
+      continue;
+    }
+
+    const key = rawLine.slice(0, separatorIndex).trim();
+    if (!key) {
+      continue;
+    }
+
+    const rawValue = rawLine.slice(separatorIndex + 1).trim();
+    values.set(key, parseEnvValue(rawValue));
+  }
+
+  return values;
+}
+
+function parseEnvValue(rawValue: string) {
+  if (!rawValue) {
+    return '';
+  }
+
+  const quote = rawValue[0];
+  if (quote === '"' || quote === "'") {
+    const closingQuoteIndex = findClosingQuoteIndex(rawValue, quote);
+    if (closingQuoteIndex >= 0) {
+      return unescapeQuotedEnvValue(rawValue.slice(1, closingQuoteIndex), quote);
+    }
+  }
+
+  const commentIndex = rawValue.indexOf(' #');
+  const valueWithoutComment = commentIndex >= 0 ? rawValue.slice(0, commentIndex) : rawValue;
+  return valueWithoutComment.trim();
+}
+
+function unescapeQuotedEnvValue(value: string, quote: '"' | "'") {
+  if (quote === '"') {
+    return value.replace(/\\([\\"nrtbfv])/g, (_match, escaped: string) => {
+      switch (escaped) {
+        case '\\':
+          return '\\';
+        case '"':
+          return '"';
+        case 'n':
+          return '\n';
+        case 'r':
+          return '\r';
+        case 't':
+          return '\t';
+        case 'b':
+          return '\b';
+        case 'f':
+          return '\f';
+        case 'v':
+          return '\v';
+        default:
+          return escaped;
+      }
+    });
+  }
+
+  return value.replace(/\\'/g, "'").replace(/\\\\/g, '\\');
+}
+
+function findClosingQuoteIndex(value: string, quote: '"' | "'") {
+  for (let index = 1; index < value.length; index += 1) {
+    if (value[index] === quote && value[index - 1] !== '\\') {
+      const trailing = value.slice(index + 1).trim();
+      if (!trailing || trailing.startsWith('#')) {
+        return index;
+      }
+    }
+  }
+
+  return -1;
+}
+
+function isMissingFileError(error: unknown) {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT';
 }
 
 function isValidationLikeError(error: unknown) {
