@@ -1,4 +1,4 @@
-import type { Asset, GalleryItem, GenerationResult, GenerationTask, HistoryItem, QueueItem, User } from './types';
+import type { Asset, GalleryItem, GenerationResult, GenerationTask, HistoryItem, QueueItem, SessionSummary, User } from './types';
 
 async function request<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
@@ -22,13 +22,16 @@ async function request<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  me: () => request<{ user: User | null }>('/api/auth/me'),
+  me: () => request<{ user: User | null; session: SessionSummary | null }>('/api/auth/me'),
   mockLogin: (displayName: string) =>
-    request<{ user: User; session: { id: string; expiresAt: string | null; authMode: string } }>('/api/auth/mock-login', {
+    request<{ user: User; session: SessionSummary }>('/api/auth/mock-login', {
       method: 'POST',
       body: JSON.stringify({ displayName }),
     }),
-  logout: () => request<{ success: true }>('/api/auth/logout', { method: 'POST', body: JSON.stringify({}) }),
+  startLogin: () => {
+    window.location.assign('/api/auth/login');
+  },
+  logout: () => request<{ success: true; postLogoutRedirectUrl?: string }>('/api/auth/logout', { method: 'POST', body: JSON.stringify({}) }),
   upload: async (file: File, category: 'personal_reference' | 'style_reference') => {
     const formData = new FormData();
     formData.append('file', file);

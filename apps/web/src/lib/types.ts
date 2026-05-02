@@ -1,3 +1,11 @@
+export type AuthMode = 'mock' | 'oidc';
+
+export type SessionSummary = {
+  id: string;
+  expiresAt: string | null;
+  authMode: AuthMode;
+};
+
 export type User = {
   id: string;
   displayName: string;

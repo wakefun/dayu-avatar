@@ -41,7 +41,7 @@ export function AppShell({ title, user, drawerOpen, onOpenDrawer, onCloseDrawer,
           <div className="avatar-mark">{user.displayName.slice(0, 1)}</div>
           <div>
             <strong>{user.displayName}</strong>
-            <p>{user.email ?? 'mock 登录'}</p>
+            <p>{user.email ?? '已连接大宇统一登录'}</p>
           </div>
         </div>
         <nav className="drawer-nav">

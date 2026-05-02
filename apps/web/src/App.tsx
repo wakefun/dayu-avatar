@@ -2,7 +2,7 @@ import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-
 import { useEffect, useMemo, useState } from 'react';
 import { AppShell } from './components/AppShell';
 import { api } from './lib/api';
-import type { User } from './lib/types';
+import type { SessionSummary, User } from './lib/types';
 import { GalleryPage } from './pages/GalleryPage';
 import { GeneratePage } from './pages/GeneratePage';
 import { HistoryPage } from './pages/HistoryPage';
@@ -24,6 +24,7 @@ export function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<SessionSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -32,11 +33,13 @@ export function App() {
       try {
         const response = await api.me();
         setUser(response.user);
+        setSession(response.session);
         if (!response.user && location.pathname !== '/login') {
           navigate('/login', { replace: true });
         }
       } catch {
         setUser(null);
+        setSession(null);
         if (location.pathname !== '/login') {
           navigate('/login', { replace: true });
         }
@@ -63,7 +66,7 @@ export function App() {
   if (!user) {
     return (
       <Routes>
-        <Route path="/login" element={<LoginPage onLogin={setUser} />} />
+        <Route path="/login" element={<LoginPage />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     );
@@ -79,7 +82,19 @@ export function App() {
         <Route path="/gallery" element={<GalleryPage />} />
         <Route path="/queue" element={<QueuePage />} />
         <Route path="/history" element={<HistoryPage />} />
-        <Route path="/settings" element={<SettingsPage user={user} onLogout={() => setUser(null)} />} />
+        <Route
+          path="/settings"
+          element={
+            <SettingsPage
+              user={user}
+              session={session}
+              onLogout={() => {
+                setUser(null);
+                setSession(null);
+              }}
+            />
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppShell>

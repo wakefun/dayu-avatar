@@ -1,16 +1,18 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api';
-import type { User } from '../lib/types';
 
-type LoginPageProps = {
-  onLogin: (user: User) => void;
-};
-
-export function LoginPage({ onLogin }: LoginPageProps) {
-  const navigate = useNavigate();
+export function LoginPage() {
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const message = searchParams.get('error');
+    if (message) {
+      setError(message);
+    }
+  }, [searchParams]);
 
   return (
     <div className="login-page">
@@ -25,18 +27,10 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           type="button"
           className="primary-button"
           disabled={loading}
-          onClick={async () => {
-            try {
-              setLoading(true);
-              setError(null);
-              const response = await api.mockLogin('大宇体验用户');
-              onLogin(response.user);
-              navigate('/');
-            } catch (requestError) {
-              setError(requestError instanceof Error ? requestError.message : '登录失败');
-            } finally {
-              setLoading(false);
-            }
+          onClick={() => {
+            setLoading(true);
+            setError(null);
+            api.startLogin();
           }}
         >
           {loading ? '登录中...' : '使用大宇统一登录'}

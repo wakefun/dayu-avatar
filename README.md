@@ -1,11 +1,12 @@
 # Dayu Avatar MVP
 
-A mobile-first full-stack MVP for "大宇头像". Users log in through a mock "大宇统一登录" entry, upload personal and style reference images, create avatar generation tasks, watch mock progress, view generated results, save favorites to a gallery, and review queue and history data.
+A mobile-first full-stack MVP for "大宇头像". Users log in through the Dayu unified login entry, upload personal and style reference images, create avatar generation tasks, watch progress, view generated results, save favorites to a gallery, and review queue and history data.
 
-This repository is intentionally mock-first:
-- OAuth is represented by a mock login flow today.
-- Image generation is represented by a local mock pipeline today.
-- SQLite and local files persist app state so the demo survives refreshes and restarts.
+The repository remains mock-first by default, but now supports real runtime switches for both authentication and image generation:
+- `AUTH_MODE=mock|oidc`
+- `GENERATION_MODE=mock|openai`
+
+SQLite and local files persist app state so the demo survives refreshes and restarts.
 
 ## Tech stack
 
@@ -16,6 +17,7 @@ This repository is intentionally mock-first:
 - Uploads: `multer`
 - Sessions: `express-session` with a SQLite-backed custom session store
 - Mock image output: generated local PNG files via `pngjs`
+- Real image output: OpenAI-compatible `/v1/images/generations`
 
 ## Directory structure
 
@@ -60,30 +62,41 @@ pnpm install
 
 ### Backend
 
-The repository includes `apps/api/.env.example` as a reference file for backend settings.
+Use `apps/api/.env.example` as the reference for backend settings.
 
-Important: the current API runtime reads values from `process.env`, but the existing `pnpm dev` script does not auto-load `apps/api/.env`.
+Important: the current `pnpm dev` script does not auto-load `apps/api/.env`, so either:
+- export environment variables in your shell before running the app, or
+- rely on the built-in defaults in `apps/api/src/index.ts` for local mock mode.
 
-That means you can either:
-- rely on the built-in local defaults already present in `apps/api/src/index.ts`, or
-- export the variables in your shell before running `pnpm dev`
-
-Current runtime keys actually used by the API:
-- `PORT`: API port. Default local value is `3001`.
-- `WEB_ORIGIN`: frontend origin allowed by CORS. Default local value is `http://localhost:5173`.
+Runtime keys used by the API:
+- `PORT`: API port. Default `3001`.
+- `WEB_ORIGIN`: frontend origin allowed by CORS and used for auth redirects. Default `http://localhost:5173`.
 - `SESSION_SECRET`: secret used by `express-session`.
+- `AUTH_MODE`: `mock` or `oidc`. Defaults to `mock`.
+- `GENERATION_MODE`: `mock` or `openai`. Defaults to `mock`.
 
-Documented placeholder keys for future integrations:
-- `AUTH_MODE`: reserved placeholder for future auth mode switching. The current MVP only implements mock login.
-- `GENERATION_MODE`: reserved placeholder for future generation provider switching. The current MVP only implements mock generation.
-- `OPENAI_*`: placeholders for a future OpenAI-compatible image generation integration.
-- `OIDC_*`: placeholders for a future real Dayu/OIDC login integration.
+OpenAI-compatible generation keys:
+- `OPENAI_BASE_URL`
+- `OPENAI_API_KEY`
+- `OPENAI_IMAGE_MODEL` default `gpt-image-2`
+- `OPENAI_IMAGE_QUALITY` default `high`
 
-The current code does not implement real OIDC or real OpenAI image generation yet. Those variables are documented now so the future integration points are visible without implying they are active today.
+OIDC login keys:
+- `OIDC_DISCOVERY_URL`
+- `OIDC_CLIENT_ID`
+- `OIDC_CLIENT_SECRET`
+- `OIDC_REDIRECT_URI`
+- `OIDC_POST_LOGOUT_REDIRECT_URI`
+
+Behavior summary:
+- In `AUTH_MODE=mock`, clicking the login button creates a local mock session and redirects back into the app.
+- In `AUTH_MODE=oidc`, the backend starts Authorization Code + PKCE, handles the callback, creates/updates the local user, stores only the app session plus `id_token` server-side for logout, and redirects back to the frontend root.
+- In `GENERATION_MODE=mock`, task completion writes generated placeholder PNGs locally.
+- In `GENERATION_MODE=openai`, task completion calls the configured OpenAI-compatible image generation endpoint and persists the returned image locally.
 
 ### Frontend
 
-The web app does not currently require any Vite environment variables, so no frontend `.env.example` is needed at this stage.
+The web app does not require any Vite environment variables in this MVP.
 
 ## Development
 
@@ -112,20 +125,22 @@ pnpm build
 ## Core MVP flow
 
 1. Open the app and land on `/login`.
-2. Click `使用大宇统一登录` to create a local mock session.
+2. Click `使用大宇统一登录`.
+   - mock mode: local mock session is created
+   - oidc mode: browser is redirected to the provider and then back to the app
 3. On the generation page:
    - upload a personal reference image
    - upload an optional style reference image
    - enter a prompt
    - toggle style tags
    - submit a generation task
-4. Move to the loading page and poll mock task progress.
+4. Move to the loading page and poll task progress.
 5. View the generated result.
 6. Save the result to the gallery, download it, or retry generation.
 7. Review active and past tasks in queue and history.
-8. Open settings to inspect the current mock user and log out.
+8. Open settings to inspect the current user and log out.
 
-The backend seeds a few demo tasks after the first mock login for a new local user so queue/history states are easier to inspect.
+The backend still seeds a few demo tasks after the first mock login for a new local user so queue/history states are easier to inspect.
 
 ## Data and storage locations
 
@@ -133,7 +148,7 @@ Runtime data is stored under the repo-local `data/` directory:
 
 - SQLite database: `data/app.db`
 - Uploaded references: `data/uploads/...`
-- Generated mock images: `data/generated/...`
+- Generated images: `data/generated/...`
 
 Public file URLs returned by the API use these routes:
 - `/static/uploads/...`
@@ -142,7 +157,7 @@ Public file URLs returned by the API use these routes:
 ## API notes
 
 The MVP backend exposes REST endpoints under `/api/**` for:
-- auth session lookup and mock login/logout
+- auth session lookup, login start, callback, and logout
 - uploads
 - generation tasks and progress/result polling
 - retry
@@ -154,14 +169,59 @@ Response shapes are intentionally simple:
 - list: `{ "items": [...] }`
 - error: `{ "error": { "code", "message" } }`
 
-## Mock-first implementation notes
+## Auth implementation notes
 
-Current implementation status:
-- Mock login: implemented
-- Mock generation progress and result creation: implemented
-- SQLite persistence: implemented
-- Local file upload and static file serving: implemented
-- Real OIDC login: not implemented yet
-- Real OpenAI-compatible image generation: not implemented yet
+Implemented now:
+- `GET /api/auth/me`
+- `GET /api/auth/login`
+- `GET /api/auth/callback`
+- `POST /api/auth/mock-login`
+- `POST /api/auth/logout`
+- `GET /api/auth/logout/provider`
 
-That means this repository is suitable for local MVP demos and contract validation, while preserving clear configuration placeholders for future auth and generation upgrades.
+OIDC implementation scope for this MVP:
+- discovery document fetch
+- Authorization Code + PKCE
+- state and nonce stored in server session
+- token exchange
+- ID token verification against provider JWKS for `RS256` and `ES256`
+- issuer, audience, expiration, issued-at, nonce, and subject validation
+- local user/account upsert using verified provider `sub`
+- optional provider logout redirect when discoverable
+
+Non-goals still unchanged:
+- no full token introspection
+- no access token persistence
+- no secret/token logging
+
+## Generation implementation notes
+
+Implemented now:
+- mock generation path preserved
+- OpenAI-compatible generation path added
+- supports provider responses that contain either `b64_json` or `url`
+- generated output is always persisted to local files and exposed through `/static/generated/...`
+
+If a real generation call fails, the task is marked failed with `GENERATION_FAILED` and a safe message. Server logs include a sanitized provider status/error summary without API keys, bearer tokens, or signed image URLs.
+
+For `GENERATION_MODE=openai`, first verify the deployment machine can reach `OPENAI_BASE_URL` over HTTPS. A task error such as `生成服务网络连接失败，请检查 Base URL、网络或代理配置` means the request did not receive an HTTP response from the provider; check DNS, TLS, firewall, and outbound proxy settings before changing prompts or model parameters.
+
+## Security notes
+
+- Do not expose `data/` as a single static root.
+- Do not print API keys, ID tokens, or provider responses into logs.
+- Session cookies remain HTTP-only.
+- OIDC `id_token` is kept server-side only and used only for optional logout redirection.
+
+## Current verification status
+
+The codebase is intended to pass:
+
+```bash
+pnpm typecheck
+pnpm lint
+pnpm build
+```
+
+Mock mode can be smoke-tested locally without secrets.
+Real OIDC and OpenAI modes require valid provider credentials and cannot be fully exercised without environment configuration.
