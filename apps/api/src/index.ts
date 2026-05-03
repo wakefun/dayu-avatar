@@ -1610,7 +1610,7 @@ async function generateEnhancedOpenAiPrompt(task: TaskRow) {
         {
           role: 'system',
           content:
-            'You improve prompts for an avatar image-edit workflow. Return only the final image-generation prompt text. Do not wrap it in JSON, markdown, quotes, or explanations.',
+            'You improve prompts for an avatar image-edit workflow. Return only the final image-generation prompt text. Do not wrap it in JSON, markdown, quotes, or explanations. When a style reference image is provided, prioritize its medium, art style, and visual language over the photographic realism of the personal reference while preserving the first person\'s recognizable identity.',
         },
         {
           role: 'user',
@@ -1648,9 +1648,9 @@ function buildPromptAnalysisMessage(task: TaskRow, personalAsset: AssetRow, styl
       type: 'text',
       text: [
         'Project preset: create a single premium AI avatar portrait for a real person with a refined, elegant, warm, luminous, gallery-like result suitable for a premium profile avatar.',
-        'The first uploaded image is the personal identity reference. Preserve the real person faithfully: facial structure, eyes, nose, mouth, hairstyle, skin tone, and overall recognizable likeness. Do not invent a different person or change key personal traits.',
+        'The first uploaded image is the personal identity reference. Preserve the real person\'s recognizable identity through facial structure, face shape, eyes, nose, mouth, hairstyle, and signature features. Transfer that identity into the target style as faithfully as possible. Do not invent a different person or change key personal traits. Do not preserve the first image\'s photographic realism, camera look, or literal photo texture unless the requested style is explicitly photographic.',
         styleAsset
-          ? 'The second uploaded image is style-only reference. Use it for mood, lighting, palette, composition, texture, and artistic treatment only. Never copy identity from the second image.'
+          ? 'The second uploaded image is style-only reference and has style priority. Use its medium, art style, visual language, rendering approach, palette, composition, texture, linework, and atmosphere as the primary target style. If the first image is a real selfie/photo and the second image is anime, 2D, illustration, watercolor, or any other non-photographic medium, transform the first person into that medium instead of preserving photo realism. Never copy identity, facial features, or character design from the second image.'
           : 'No second style-reference image is provided. Use only the written direction for style while preserving the first image identity.',
         `User prompt: ${task.prompt.trim() || 'None provided.'}`,
         `Style tags: ${styleTags.length > 0 ? styleTags.join(' | ') : 'None.'}`,
