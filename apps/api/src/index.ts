@@ -94,6 +94,8 @@ type SessionRow = {
   expires_at: string | null;
 };
 
+type OidcSigningAlg = 'RS256' | 'ES256' | 'ES384';
+
 type OidcDiscoveryDocument = {
   issuer?: string;
   authorization_endpoint: string;
@@ -1858,8 +1860,8 @@ async function verifyOidcIdToken(idToken: string, discovery: OidcDiscoveryDocume
   }
 
   const publicKey = crypto.createPublicKey({ key, format: 'jwk' });
-  const verifyAlg = alg === 'RS256' ? 'RSA-SHA256' : 'SHA256';
-  const signature = alg === 'ES256' ? joseToDerSignature(Buffer.from(parts[2], 'base64url'), 32) : Buffer.from(parts[2], 'base64url');
+  const verifyAlg = getOidcVerifyAlgorithm(alg);
+  const signature = decodeOidcSignature(parts[2], alg);
   const verified = crypto.verify(verifyAlg, Buffer.from(`${parts[0]}.${parts[1]}`), publicKey, signature);
 
   if (!verified) {
@@ -1917,11 +1919,32 @@ function parseJwtPart<T>(value: string) {
   return JSON.parse(Buffer.from(value, 'base64url').toString('utf8')) as T;
 }
 
-function isSupportedOidcSigningAlg(alg: string) {
-  return alg === 'RS256' || alg === 'ES256';
+function isSupportedOidcSigningAlg(alg: string): alg is OidcSigningAlg {
+  return alg === 'RS256' || alg === 'ES256' || alg === 'ES384';
 }
 
-function findSigningJwk(jwks: OidcJwk[], alg: 'RS256' | 'ES256', kid: string | null) {
+function getOidcVerifyAlgorithm(alg: OidcSigningAlg) {
+  if (alg === 'RS256') {
+    return 'RSA-SHA256';
+  }
+  if (alg === 'ES384') {
+    return 'SHA384';
+  }
+  return 'SHA256';
+}
+
+function decodeOidcSignature(signaturePart: string, alg: OidcSigningAlg) {
+  const signature = Buffer.from(signaturePart, 'base64url');
+  if (alg === 'ES256') {
+    return joseToDerSignature(signature, 32);
+  }
+  if (alg === 'ES384') {
+    return joseToDerSignature(signature, 48);
+  }
+  return signature;
+}
+
+function findSigningJwk(jwks: OidcJwk[], alg: OidcSigningAlg, kid: string | null) {
   const matchingKeys = jwks.filter((key) => {
     if (kid && key.kid !== kid) {
       return false;
@@ -1932,7 +1955,13 @@ function findSigningJwk(jwks: OidcJwk[], alg: 'RS256' | 'ES256', kid: string | n
     if (key.alg && key.alg !== alg) {
       return false;
     }
-    return alg === 'RS256' ? key.kty === 'RSA' : key.kty === 'EC' && key.crv === 'P-256';
+    if (alg === 'RS256') {
+      return key.kty === 'RSA';
+    }
+    if (alg === 'ES384') {
+      return key.kty === 'EC' && key.crv === 'P-384';
+    }
+    return key.kty === 'EC' && key.crv === 'P-256';
   });
 
   if (!kid && matchingKeys.length !== 1) {
@@ -1953,7 +1982,7 @@ function isOidcJwk(value: unknown): value is OidcJwk {
 
 function joseToDerSignature(signature: Buffer, partLength: number) {
   if (signature.length !== partLength * 2) {
-    throw new Error('invalid_es256_signature');
+    throw new Error('invalid_ecdsa_signature');
   }
 
   const r = signatureIntegerToDer(signature.subarray(0, partLength));

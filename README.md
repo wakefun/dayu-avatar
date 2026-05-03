@@ -187,7 +187,7 @@ OIDC implementation scope for this MVP:
 - Authorization Code + PKCE
 - state and nonce stored in server session
 - token exchange
-- ID token verification against provider JWKS for `RS256` and `ES256`
+- ID token verification against provider JWKS for `RS256`, `ES256`, and `ES384`
 - issuer, audience, expiration, issued-at, nonce, and subject validation
 - local user/account upsert using verified provider `sub`
 - optional provider logout redirect when discoverable
