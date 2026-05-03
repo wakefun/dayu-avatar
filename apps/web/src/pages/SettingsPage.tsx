@@ -11,17 +11,17 @@ type SettingsPageProps = {
 
 export function SettingsPage({ user, session, onLogout }: SettingsPageProps) {
   const navigate = useNavigate();
-  const authModeLabel = session?.authMode === 'oidc' ? '大宇统一登录（OIDC）' : '大宇统一登录（mock）';
+  const authModeLabel = session?.authMode === 'oidc' ? '已连接大宇统一登录' : '当前会话由大宇统一登录接入';
 
   return (
     <div className="stack-page">
-      <PageSection title="账户设置" subtitle="展示当前用户、登录方式状态与退出入口。">
+      <PageSection title="账户设置" subtitle="查看当前用户信息、登录状态与退出入口。">
         <div className="settings-card">
           <div className="avatar-mark large">{user.displayName.slice(0, 1)}</div>
           <div>
             <strong>{user.displayName}</strong>
             <p>{user.email ?? '未提供邮箱'}</p>
-            <small>登录方式：{authModeLabel}</small>
+            <small>{authModeLabel}</small>
           </div>
         </div>
         <div className="list-card">

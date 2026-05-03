@@ -1,20 +1,16 @@
 type ChipGroupProps = {
   tags: string[];
-  selected: string[];
-  onToggle: (tag: string) => void;
+  onSelect: (tag: string) => void;
 };
 
-export function ChipGroup({ tags, selected, onToggle }: ChipGroupProps) {
+export function ChipGroup({ tags, onSelect }: ChipGroupProps) {
   return (
     <div className="chip-group">
-      {tags.map((tag) => {
-        const active = selected.includes(tag);
-        return (
-          <button key={tag} type="button" className={`chip ${active ? 'active' : ''}`} onClick={() => onToggle(tag)}>
-            {tag}
-          </button>
-        );
-      })}
+      {tags.map((tag) => (
+        <button key={tag} type="button" className="chip" onClick={() => onSelect(tag)}>
+          {tag}
+        </button>
+      ))}
     </div>
   );
 }

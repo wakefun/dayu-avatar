@@ -17,7 +17,7 @@ SQLite and local files persist app state so the demo survives refreshes and rest
 - Uploads: `multer`
 - Sessions: `express-session` with a SQLite-backed custom session store
 - Mock image output: generated local PNG files via `pngjs`
-- Real image output: OpenAI-compatible `/v1/images/generations`
+- Real image output: OpenAI-compatible `/v1/images/edits` with uploaded reference images
 
 ## Directory structure
 
@@ -95,7 +95,7 @@ Behavior summary:
 - In `AUTH_MODE=mock`, clicking the login button creates a local mock session and redirects back into the app.
 - In `AUTH_MODE=oidc`, the backend starts Authorization Code + PKCE, handles the callback, creates/updates the local user, stores only the app session plus `id_token` server-side for logout, and redirects back to the frontend root.
 - In `GENERATION_MODE=mock`, task completion writes generated placeholder PNGs locally.
-- In `GENERATION_MODE=openai`, task completion calls the configured OpenAI-compatible image generation endpoint and persists the returned image locally.
+- In `GENERATION_MODE=openai`, task completion calls the configured OpenAI-compatible image edits endpoint with uploaded reference images and persists the returned image locally.
 
 ### Frontend
 

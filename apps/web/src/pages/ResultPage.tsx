@@ -32,7 +32,7 @@ export function ResultPage() {
 
   return (
     <div className="stack-page">
-      <PageSection title="生成结果" subtitle="Mock 结果与未来真实生成共用同一数据结构。">
+      <PageSection title="生成结果" subtitle="结果已准备完成，你可以保存到图库、下载原图或继续生成新的版本。">
         {result?.imageUrl ? <img className="result-image" src={result.imageUrl} alt="生成头像结果" /> : null}
         {error ? <div className="error-text">{error}</div> : null}
         <div className="action-grid">
@@ -75,14 +75,14 @@ export function ResultPage() {
         </div>
       </PageSection>
 
-      <PageSection title="生成参数" subtitle="展示任务详情与风格设置。">
+      <PageSection title="生成参数" subtitle="查看本次头像生成所使用的提示词、风格建议与基础参数。">
         <dl className="detail-list">
           <div>
             <dt>提示词</dt>
             <dd>{task?.prompt || '未填写提示词'}</dd>
           </div>
           <div>
-            <dt>风格标签</dt>
+            <dt>风格建议</dt>
             <dd>{task?.styleTags.join(' / ') || '无'}</dd>
           </div>
           <div>

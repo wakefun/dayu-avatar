@@ -151,6 +151,15 @@ type OpenAiImagesResponse = {
   error?: OpenAiErrorPayload;
 };
 
+type OpenAiEditRequestVariant = {
+  files: Array<{
+    buffer: Buffer;
+    mimeType: string;
+    fileName: string;
+  }>;
+  fields: Record<string, string>;
+};
+
 type OpenAiGenerationFailure = {
   status: number | null;
   providerCode: string | null;
@@ -1167,7 +1176,7 @@ function ensureSeedTasks(userId: string) {
 
   db.prepare(
     `UPDATE generation_tasks SET status = 'failed', progress_percent = 42, progress_step = '提取风格氛围',
-     error_code = 'GENERATION_FAILED', error_message = 'Mock 任务演示失败状态', created_at = ?, updated_at = ? WHERE id = ?`
+     error_code = 'GENERATION_FAILED', error_message = '当前任务未能顺利完成，请重新尝试。', created_at = ?, updated_at = ? WHERE id = ?`
   ).run(new Date(now - 1000 * 60 * 20).toISOString(), new Date(now - 1000 * 60 * 19).toISOString(), failed.id);
 
   db.prepare(
@@ -1328,24 +1337,30 @@ async function generateOpenAiImage(task: TaskRow): Promise<GeneratedImagePayload
   ensureOpenAiConfigured();
   const requestUrl = buildOpenAiImagesUrl(openAiBaseUrl);
   const [width, height] = parseSize(task.size);
-  const outputFormat = normalizeOutputFormat(task.output_format);
-  const requestBodies = buildOpenAiRequestBodies(task, outputFormat);
+  const requestVariants = buildOpenAiEditRequestVariants(task);
 
-  for (const body of requestBodies) {
+  for (const variant of requestVariants) {
+    const formData = new FormData();
+    for (const file of variant.files) {
+      formData.append('image', new Blob([toArrayBuffer(file.buffer)], { type: file.mimeType }), file.fileName);
+    }
+    for (const [key, value] of Object.entries(variant.fields)) {
+      formData.append(key, value);
+    }
+
     const response = await fetch(requestUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${openAiApiKey}`,
-        'Content-Type': 'application/json',
       },
-      body: JSON.stringify(body),
+      body: formData,
       signal: AbortSignal.timeout(90_000),
     });
 
     const payload = await readOpenAiResponse(response);
 
     if (!response.ok) {
-      if (response.status === 400 && body !== requestBodies[requestBodies.length - 1]) {
+      if (response.status === 400 && variant !== requestVariants[requestVariants.length - 1]) {
         continue;
       }
       throw extractOpenAiFailureFromResponse(response.status, payload);
@@ -1432,43 +1447,100 @@ async function generateOpenAiImage(task: TaskRow): Promise<GeneratedImagePayload
   });
 }
 
-function buildOpenAiRequestBodies(task: TaskRow, outputFormat: 'png' | 'jpeg' | 'webp') {
-  const baseBody = {
+function buildOpenAiEditRequestVariants(task: TaskRow): OpenAiEditRequestVariant[] {
+  const personalAsset = getAsset(task.personal_reference_asset_id);
+  if (!personalAsset) {
+    throw createOpenAiGenerationFailure({
+      status: null,
+      providerCode: null,
+      providerType: null,
+      providerMessage: 'Missing personal reference asset for generation task',
+      internalCode: 'OPENAI_MISSING_REFERENCE_ASSET',
+      taskMessage: '缺少个人形象参考图，无法开始生成。',
+    });
+  }
+
+  const styleAsset = task.style_reference_asset_id ? getAsset(task.style_reference_asset_id) ?? null : null;
+  const outputFormat = normalizeOutputFormat(task.output_format);
+  const baseFields = {
     model: task.model || defaultImageModel,
-    prompt: buildGenerationPrompt(task),
-    n: 1,
-    quality: task.quality || defaultImageQuality,
+    prompt: buildGenerationPrompt(task, Boolean(styleAsset)),
     size: normalizeOpenAiSize(task.size),
+  } satisfies Record<string, string>;
+
+  const filesWithStyle = [
+    toOpenAiImageFile(personalAsset, 'personal-reference'),
+    ...(styleAsset ? [toOpenAiImageFile(styleAsset, 'style-reference')] : []),
+  ];
+  const filesWithoutStyle = [toOpenAiImageFile(personalAsset, 'personal-reference')];
+
+  const withQualityAndFormat = {
+    ...baseFields,
+    quality: task.quality || defaultImageQuality,
+    output_format: outputFormat,
+    response_format: 'b64_json',
   };
 
-  return [
+  const withFormatOnly = {
+    ...baseFields,
+    quality: task.quality || defaultImageQuality,
+    output_format: outputFormat,
+  };
+
+  const minimalFields = {
+    ...baseFields,
+    quality: task.quality || defaultImageQuality,
+  };
+
+  const variants: OpenAiEditRequestVariant[] = [
     {
-      ...baseBody,
-      output_format: outputFormat,
-      response_format: 'b64_json',
+      files: filesWithStyle,
+      fields: withQualityAndFormat,
     },
     {
-      ...baseBody,
-      output_format: outputFormat,
+      files: filesWithStyle,
+      fields: withFormatOnly,
     },
-    baseBody,
+    {
+      files: filesWithStyle,
+      fields: minimalFields,
+    },
   ];
+
+  if (styleAsset) {
+    variants.push(
+      {
+        files: filesWithoutStyle,
+        fields: withQualityAndFormat,
+      },
+      {
+        files: filesWithoutStyle,
+        fields: withFormatOnly,
+      },
+      {
+        files: filesWithoutStyle,
+        fields: minimalFields,
+      }
+    );
+  }
+
+  return variants;
 }
 
 function buildOpenAiImagesUrl(baseUrl: string) {
   const url = new URL(baseUrl);
   const normalizedPath = url.pathname.replace(/\/+$/, '');
 
-  if (normalizedPath.endsWith('/v1/images/generations')) {
+  if (normalizedPath.endsWith('/v1/images/edits')) {
     return url.toString();
   }
 
   if (normalizedPath.endsWith('/v1')) {
-    url.pathname = `${normalizedPath}/images/generations`;
+    url.pathname = `${normalizedPath}/images/edits`;
     return url.toString();
   }
 
-  url.pathname = `${normalizedPath}/v1/images/generations`.replace(/\/+/g, '/');
+  url.pathname = `${normalizedPath}/v1/images/edits`.replace(/\/+/g, '/');
   return url.toString();
 }
 
@@ -1685,12 +1757,12 @@ function mapSessionSummary(sessionId: string, sessionData: session.SessionData) 
 
 function taskProgressMessage(task: TaskRow) {
   if (task.status === 'completed') {
-    return generationMode === 'mock' ? 'Mock generation complete' : 'Avatar generation complete';
+    return '头像生成已完成';
   }
   if (task.status === 'failed') {
-    return 'Avatar generation failed';
+    return '头像生成失败';
   }
-  return generationMode === 'mock' ? 'Mock generation in progress' : 'Avatar generation in progress';
+  return '头像生成进行中';
 }
 
 function getUser(userId: string) {
@@ -2075,13 +2147,71 @@ function normalizeOpenAiBaseUrl(value: string | undefined) {
   return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
 }
 
-function buildGenerationPrompt(task: TaskRow) {
-  return task.prompt.trim() || '清透苹果系艺术头像，自然光，画廊感';
+function buildGenerationPrompt(task: TaskRow, hasStyleReference: boolean) {
+  const userPrompt = task.prompt.trim();
+  const styleTags = parseStoredStyleTags(task.style_tags_json);
+  const promptSections = [
+    'Create a single premium AI avatar portrait for a real person.',
+    'Use the first uploaded image as the personal identity reference and preserve the subject identity faithfully: keep facial structure, eyes, nose, mouth, hairstyle, skin tone, and overall recognizable likeness consistent with that person.',
+    'Do not invent a different person, do not change gender presentation, and do not distort age, face shape, or key personal traits.',
+  ];
+
+  if (userPrompt) {
+    promptSections.push(`User direction: ${userPrompt}`);
+  }
+
+  if (styleTags.length > 0) {
+    promptSections.push(`Style suggestions collected from the UI: ${styleTags.join(' | ')}`);
+  }
+
+  if (hasStyleReference) {
+    promptSections.push(
+      'Use the second uploaded image as a style-only reference: follow its mood, composition, lighting, color palette, texture, and artistic treatment while keeping the person from the personal identity reference clearly recognizable.'
+    );
+  } else {
+    promptSections.push('No separate style reference image is provided, so rely on the written direction while keeping the portrait polished, high-end, and gallery-like.');
+  }
+
+  promptSections.push(
+    'Output should feel refined, elegant, warm, luminous, and suitable for a premium profile avatar.',
+    `Requested output size: ${normalizeOpenAiSize(task.size)}.`
+  );
+
+  return promptSections.join('\n\n');
+}
+function parseStoredStyleTags(styleTagsJson: string) {
+  try {
+    const parsed = JSON.parse(styleTagsJson) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+  } catch {
+    return [];
+  }
+}
+
+function toOpenAiImageFile(asset: AssetRow, fallbackStem: string) {
+  const absolutePath = path.join(dataRoot, asset.storage_path);
+  return {
+    buffer: fs.readFileSync(absolutePath),
+    mimeType: asset.mime_type || 'application/octet-stream',
+    fileName: buildOpenAiUploadFilename(asset, fallbackStem),
+  };
+}
+
+function buildOpenAiUploadFilename(asset: AssetRow, fallbackStem: string) {
+  const extension = mimeToExtension(asset.mime_type);
+  return `${fallbackStem}${extension}`;
 }
 
 function normalizeOpenAiSize(size: string) {
   const [width, height] = parseSize(size);
   return `${width}x${height}`;
+}
+
+function toArrayBuffer(buffer: Buffer) {
+  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
 }
 
 function detectImageFile(buffer: Buffer) {

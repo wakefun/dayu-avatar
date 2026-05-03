@@ -44,7 +44,7 @@ export function LoadingPage() {
 
   return (
     <div className="stack-page">
-      <PageSection title="正在生成头像" subtitle="当前任务仍在处理中，你可以稍后去任务队列查看。">
+      <PageSection title="正在生成头像" subtitle="当前任务仍在处理中，你可以稍后前往任务队列查看最新进度。">
         <div className="progress-shell">
           <div className="progress-orb" />
           <strong>{task?.progress.step ?? '排队中'}</strong>
@@ -55,7 +55,7 @@ export function LoadingPage() {
         </div>
       </PageSection>
 
-      <PageSection title="步骤反馈" subtitle="Mock 进度会自动推进直到生成完成。">
+      <PageSection title="步骤反馈" subtitle="生成进度会自动更新，完成后会为你跳转到结果页。">
         <div className="timeline">
           {steps.map((step) => {
             const active = task?.progress.step === step;
