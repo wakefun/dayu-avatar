@@ -83,6 +83,7 @@ OpenAI-compatible generation keys:
 - `OPENAI_API_KEY`
 - `OPENAI_IMAGE_MODEL` default `gpt-image-2`
 - `OPENAI_IMAGE_QUALITY` default `high`
+- `OPENAI_REQUEST_TIMEOUT_MS` request/download timeout in milliseconds, default `600000` (10 minutes); invalid or non-positive values fall back to the default
 
 OIDC login keys:
 - `OIDC_DISCOVERY_URL`
@@ -204,6 +205,7 @@ Implemented now:
 - OpenAI-compatible generation path added
 - supports provider responses that contain either `b64_json` or `url`
 - generated output is always persisted to local files and exposed through `/static/generated/...`
+- OpenAI provider requests and provider-hosted image downloads both use `OPENAI_REQUEST_TIMEOUT_MS`, defaulting to 10 minutes
 
 If a real generation call fails, the task is marked failed with `GENERATION_FAILED` and a safe message. Server logs include a sanitized provider status/error summary without API keys, bearer tokens, or signed image URLs.
 

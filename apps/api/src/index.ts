@@ -194,6 +194,8 @@ const openAiBaseUrl = normalizeOpenAiBaseUrl(process.env.OPENAI_BASE_URL);
 const openAiApiKey = process.env.OPENAI_API_KEY?.trim() ?? '';
 const defaultImageModel = process.env.OPENAI_IMAGE_MODEL?.trim() || 'gpt-image-2';
 const defaultImageQuality = process.env.OPENAI_IMAGE_QUALITY?.trim() || 'high';
+const defaultOpenAiRequestTimeoutMs = 600_000;
+const openAiRequestTimeoutMs = parseOptionalPositiveIntegerEnv(process.env.OPENAI_REQUEST_TIMEOUT_MS, defaultOpenAiRequestTimeoutMs);
 const oidcDiscoveryUrl = process.env.OIDC_DISCOVERY_URL ?? '';
 const oidcClientId = process.env.OIDC_CLIENT_ID ?? '';
 const oidcClientSecret = process.env.OIDC_CLIENT_SECRET ?? '';
@@ -1354,7 +1356,7 @@ async function generateOpenAiImage(task: TaskRow): Promise<GeneratedImagePayload
         Authorization: `Bearer ${openAiApiKey}`,
       },
       body: formData,
-      signal: AbortSignal.timeout(90_000),
+      signal: AbortSignal.timeout(openAiRequestTimeoutMs),
     });
 
     const payload = await readOpenAiResponse(response);
@@ -2278,7 +2280,7 @@ async function downloadOpenAiImage(imageUrl: string, status: number, width: numb
   let imageResponse: globalThis.Response;
 
   try {
-    imageResponse = await fetch(imageUrl, { signal: AbortSignal.timeout(90_000) });
+    imageResponse = await fetch(imageUrl, { signal: AbortSignal.timeout(openAiRequestTimeoutMs) });
   } catch {
     throw createOpenAiGenerationFailure({
       status,
@@ -2622,6 +2624,24 @@ function parseMode<T extends string>(value: string | undefined, validValues: rea
     return value as T;
   }
   return fallback;
+}
+
+function parseOptionalPositiveIntegerEnv(value: string | undefined, fallback: number) {
+  if (!value) {
+    return fallback;
+  }
+
+  const normalized = value.trim();
+  if (!normalized) {
+    return fallback;
+  }
+
+  const parsed = Number(normalized);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return parsed;
 }
 
 function buildFrontendUrl(pathname: string) {
