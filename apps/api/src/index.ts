@@ -151,6 +151,15 @@ type OpenAiImagesResponse = {
   error?: OpenAiErrorPayload;
 };
 
+type OpenAiChatResponse = {
+  choices?: Array<{
+    message?: {
+      content?: string | Array<{ type?: string; text?: string }>;
+    };
+  }>;
+  error?: OpenAiErrorPayload;
+};
+
 type OpenAiEditRequestVariant = {
   files: Array<{
     buffer: Buffer;
@@ -193,6 +202,7 @@ const generationMode = parseMode<GenerationMode>(process.env.GENERATION_MODE, ['
 const openAiBaseUrl = normalizeOpenAiBaseUrl(process.env.OPENAI_BASE_URL);
 const openAiApiKey = process.env.OPENAI_API_KEY?.trim() ?? '';
 const defaultImageModel = process.env.OPENAI_IMAGE_MODEL?.trim() || 'gpt-image-2';
+const defaultPromptModel = process.env.OPENAI_PROMPT_MODEL?.trim() || 'gpt-5.5';
 const defaultImageQuality = process.env.OPENAI_IMAGE_QUALITY?.trim() || 'high';
 const defaultOpenAiRequestTimeoutMs = 600_000;
 const openAiRequestTimeoutMs = parseOptionalPositiveIntegerEnv(process.env.OPENAI_REQUEST_TIMEOUT_MS, defaultOpenAiRequestTimeoutMs);
@@ -518,6 +528,8 @@ app.post('/api/generation-tasks', requireAuth, (req, res) => {
   const styleTags = Array.isArray(req.body?.styleTags)
     ? req.body.styleTags.filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
     : [];
+  const requestedQuantity = Number(req.body?.quantity ?? 1);
+  const quantity = Number.isFinite(requestedQuantity) ? Math.max(1, Math.min(8, Math.floor(requestedQuantity))) : 1;
   const generationParams = req.body?.generationParams ?? {};
 
   if (typeof personalReferenceAssetId !== 'string') {
@@ -539,21 +551,31 @@ app.post('/api/generation-tasks', requireAuth, (req, res) => {
     }
   }
 
-  const task = createGenerationTask({
-    userId: req.session.userId!,
-    prompt,
-    styleTags,
-    personalReferenceAssetId,
-    styleReferenceAssetId,
-    model: typeof generationParams.model === 'string' ? generationParams.model : defaultImageModel,
-    quality: typeof generationParams.quality === 'string' ? generationParams.quality : defaultImageQuality,
-    size: typeof generationParams.size === 'string' ? generationParams.size : '1024x1536',
-    outputFormat: typeof generationParams.outputFormat === 'string' ? generationParams.outputFormat : 'png',
-    sourceTaskId: null,
-  });
+  const tasks = Array.from({ length: quantity }, () =>
+    createGenerationTask({
+      userId: req.session.userId!,
+      prompt,
+      styleTags,
+      personalReferenceAssetId,
+      styleReferenceAssetId,
+      model: typeof generationParams.model === 'string' ? generationParams.model : defaultImageModel,
+      quality: typeof generationParams.quality === 'string' ? generationParams.quality : defaultImageQuality,
+      size: normalizeOpenAiSize(typeof generationParams.size === 'string' ? generationParams.size : '1024x1536'),
+      outputFormat: typeof generationParams.outputFormat === 'string' ? generationParams.outputFormat : 'png',
+      sourceTaskId: null,
+    })
+  );
 
-  res.status(201).json({ task: mapTask(task) });
+  for (const task of tasks) {
+    void startGenerationRun(task.id);
+  }
+
+  res.status(201).json({
+    task: mapTask(tasks[0]!),
+    tasks: tasks.map((task) => mapTask(task)),
+  });
 });
+
 
 app.get('/api/generation-tasks/:taskId', requireAuth, async (req, res, next) => {
   try {
@@ -1294,6 +1316,13 @@ function ensureMockGenerationResult(taskId: string) {
   return getResultByTaskId(taskId);
 }
 
+function startGenerationRun(taskId: string) {
+  if (generationMode === 'openai') {
+    return ensureOpenAiGenerationStarted(taskId);
+  }
+  return Promise.resolve(syncTask(taskId)).then(() => undefined);
+}
+
 function ensureOpenAiGenerationStarted(taskId: string) {
   const existing = generationRuns.get(taskId);
   if (existing) {
@@ -1339,7 +1368,8 @@ async function generateOpenAiImage(task: TaskRow): Promise<GeneratedImagePayload
   ensureOpenAiConfigured();
   const requestUrl = buildOpenAiImagesUrl(openAiBaseUrl);
   const [width, height] = parseSize(task.size);
-  const requestVariants = buildOpenAiEditRequestVariants(task);
+  const enhancedPrompt = await generateEnhancedOpenAiPrompt(task);
+  const requestVariants = buildOpenAiEditRequestVariants(task, enhancedPrompt);
 
   for (const variant of requestVariants) {
     const formData = new FormData();
@@ -1449,7 +1479,7 @@ async function generateOpenAiImage(task: TaskRow): Promise<GeneratedImagePayload
   });
 }
 
-function buildOpenAiEditRequestVariants(task: TaskRow): OpenAiEditRequestVariant[] {
+function buildOpenAiEditRequestVariants(task: TaskRow, enhancedPrompt: string): OpenAiEditRequestVariant[] {
   const personalAsset = getAsset(task.personal_reference_asset_id);
   if (!personalAsset) {
     throw createOpenAiGenerationFailure({
@@ -1466,7 +1496,7 @@ function buildOpenAiEditRequestVariants(task: TaskRow): OpenAiEditRequestVariant
   const outputFormat = normalizeOutputFormat(task.output_format);
   const baseFields = {
     model: task.model || defaultImageModel,
-    prompt: buildGenerationPrompt(task, Boolean(styleAsset)),
+    prompt: enhancedPrompt,
     size: normalizeOpenAiSize(task.size),
   } satisfies Record<string, string>;
 
@@ -1529,21 +1559,168 @@ function buildOpenAiEditRequestVariants(task: TaskRow): OpenAiEditRequestVariant
   return variants;
 }
 
-function buildOpenAiImagesUrl(baseUrl: string) {
+function buildOpenAiApiUrl(baseUrl: string, endpointPath: string) {
   const url = new URL(baseUrl);
   const normalizedPath = url.pathname.replace(/\/+$/, '');
 
-  if (normalizedPath.endsWith('/v1/images/edits')) {
+  if (normalizedPath.endsWith(endpointPath)) {
     return url.toString();
   }
 
   if (normalizedPath.endsWith('/v1')) {
-    url.pathname = `${normalizedPath}/images/edits`;
+    url.pathname = `${normalizedPath}${endpointPath.slice(3)}`;
     return url.toString();
   }
 
-  url.pathname = `${normalizedPath}/v1/images/edits`.replace(/\/+/g, '/');
+  url.pathname = `${normalizedPath}/v1${endpointPath.slice(3)}`.replace(/\/+/g, '/');
   return url.toString();
+}
+
+function buildOpenAiImagesUrl(baseUrl: string) {
+  return buildOpenAiApiUrl(baseUrl, '/v1/images/edits');
+}
+
+function buildOpenAiChatCompletionsUrl(baseUrl: string) {
+  return buildOpenAiApiUrl(baseUrl, '/v1/chat/completions');
+}
+
+async function generateEnhancedOpenAiPrompt(task: TaskRow) {
+  const personalAsset = getAsset(task.personal_reference_asset_id);
+  if (!personalAsset) {
+    throw createOpenAiGenerationFailure({
+      status: null,
+      providerCode: null,
+      providerType: null,
+      providerMessage: 'Missing personal reference asset for prompt analysis',
+      internalCode: 'OPENAI_MISSING_REFERENCE_ASSET',
+      taskMessage: '缺少个人形象参考图，无法开始生成。',
+    });
+  }
+
+  const styleAsset = task.style_reference_asset_id ? getAsset(task.style_reference_asset_id) ?? null : null;
+  const response = await fetch(buildOpenAiChatCompletionsUrl(openAiBaseUrl), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${openAiApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: defaultPromptModel,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You improve prompts for an avatar image-edit workflow. Return only the final image-generation prompt text. Do not wrap it in JSON, markdown, quotes, or explanations.',
+        },
+        {
+          role: 'user',
+          content: buildPromptAnalysisMessage(task, personalAsset, styleAsset),
+        },
+      ],
+    }),
+    signal: AbortSignal.timeout(openAiRequestTimeoutMs),
+  });
+
+  const payload = await readOpenAiChatResponse(response);
+  if (!response.ok) {
+    throw extractOpenAiFailureFromResponse(response.status, payload);
+  }
+
+  const prompt = extractPromptText(payload);
+  if (!prompt) {
+    throw createOpenAiGenerationFailure({
+      status: response.status,
+      providerCode: payload.error?.code ?? null,
+      providerType: payload.error?.type ?? null,
+      providerMessage: 'Prompt model returned empty content',
+      internalCode: 'OPENAI_INVALID_RESPONSE',
+      taskMessage: '生成服务未能构建有效提示词，请稍后重试。',
+    });
+  }
+
+  return prompt;
+}
+
+function buildPromptAnalysisMessage(task: TaskRow, personalAsset: AssetRow, styleAsset: AssetRow | null) {
+  const styleTags = parseStoredStyleTags(task.style_tags_json);
+  const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
+    {
+      type: 'text',
+      text: [
+        'Project preset: create a single premium AI avatar portrait for a real person with a refined, elegant, warm, luminous, gallery-like result suitable for a premium profile avatar.',
+        'The first uploaded image is the personal identity reference. Preserve the real person faithfully: facial structure, eyes, nose, mouth, hairstyle, skin tone, and overall recognizable likeness. Do not invent a different person or change key personal traits.',
+        styleAsset
+          ? 'The second uploaded image is style-only reference. Use it for mood, lighting, palette, composition, texture, and artistic treatment only. Never copy identity from the second image.'
+          : 'No second style-reference image is provided. Use only the written direction for style while preserving the first image identity.',
+        `User prompt: ${task.prompt.trim() || 'None provided.'}`,
+        `Style tags: ${styleTags.length > 0 ? styleTags.join(' | ') : 'None.'}`,
+        `Requested model: ${task.model || defaultImageModel}`,
+        `Requested quality: ${task.quality || defaultImageQuality}`,
+        `Requested output size: ${normalizeOpenAiSize(task.size)}`,
+        'Return only the final prompt to send to the image edits endpoint.',
+      ].join('\n\n'),
+    },
+    {
+      type: 'image_url',
+      image_url: {
+        url: buildAssetDataUrl(personalAsset),
+      },
+    },
+  ];
+
+  if (styleAsset) {
+    content.push({
+      type: 'image_url',
+      image_url: {
+        url: buildAssetDataUrl(styleAsset),
+      },
+    });
+  }
+
+  return content;
+}
+
+function buildAssetDataUrl(asset: AssetRow) {
+  const absolutePath = path.join(dataRoot, asset.storage_path);
+  const buffer = fs.readFileSync(absolutePath);
+  const mimeType = asset.mime_type || 'application/octet-stream';
+  return `data:${mimeType};base64,${buffer.toString('base64')}`;
+}
+
+async function readOpenAiChatResponse(response: globalThis.Response): Promise<OpenAiChatResponse> {
+  const text = await response.text();
+  if (!text) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(text) as OpenAiChatResponse;
+  } catch {
+    throw createOpenAiGenerationFailure({
+      status: response.status,
+      providerCode: null,
+      providerType: null,
+      providerMessage: `Non-JSON response: ${truncateForLog(text, 240)}`,
+      internalCode: 'OPENAI_INVALID_JSON',
+      taskMessage: '生成服务返回了无法解析的响应。',
+    });
+  }
+}
+
+function extractPromptText(payload: OpenAiChatResponse) {
+  const content = payload.choices?.[0]?.message?.content;
+  if (typeof content === 'string') {
+    return content.trim();
+  }
+  if (!Array.isArray(content)) {
+    return '';
+  }
+  return content
+    .filter((part) => part.type === 'text' && typeof part.text === 'string')
+    .map((part) => part.text?.trim() ?? '')
+    .filter(Boolean)
+    .join('\n')
+    .trim();
 }
 
 function persistGeneratedResult(task: TaskRow, image: GeneratedImagePayload) {
@@ -2149,38 +2326,6 @@ function normalizeOpenAiBaseUrl(value: string | undefined) {
   return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
 }
 
-function buildGenerationPrompt(task: TaskRow, hasStyleReference: boolean) {
-  const userPrompt = task.prompt.trim();
-  const styleTags = parseStoredStyleTags(task.style_tags_json);
-  const promptSections = [
-    'Create a single premium AI avatar portrait for a real person.',
-    'Use the first uploaded image as the personal identity reference and preserve the subject identity faithfully: keep facial structure, eyes, nose, mouth, hairstyle, skin tone, and overall recognizable likeness consistent with that person.',
-    'Do not invent a different person, do not change gender presentation, and do not distort age, face shape, or key personal traits.',
-  ];
-
-  if (userPrompt) {
-    promptSections.push(`User direction: ${userPrompt}`);
-  }
-
-  if (styleTags.length > 0) {
-    promptSections.push(`Style suggestions collected from the UI: ${styleTags.join(' | ')}`);
-  }
-
-  if (hasStyleReference) {
-    promptSections.push(
-      'Use the second uploaded image as a style-only reference: follow its mood, composition, lighting, color palette, texture, and artistic treatment while keeping the person from the personal identity reference clearly recognizable.'
-    );
-  } else {
-    promptSections.push('No separate style reference image is provided, so rely on the written direction while keeping the portrait polished, high-end, and gallery-like.');
-  }
-
-  promptSections.push(
-    'Output should feel refined, elegant, warm, luminous, and suitable for a premium profile avatar.',
-    `Requested output size: ${normalizeOpenAiSize(task.size)}.`
-  );
-
-  return promptSections.join('\n\n');
-}
 function parseStoredStyleTags(styleTagsJson: string) {
   try {
     const parsed = JSON.parse(styleTagsJson) as unknown;
@@ -2205,11 +2350,6 @@ function toOpenAiImageFile(asset: AssetRow, fallbackStem: string) {
 function buildOpenAiUploadFilename(asset: AssetRow, fallbackStem: string) {
   const extension = mimeToExtension(asset.mime_type);
   return `${fallbackStem}${extension}`;
-}
-
-function normalizeOpenAiSize(size: string) {
-  const [width, height] = parseSize(size);
-  return `${width}x${height}`;
 }
 
 function toArrayBuffer(buffer: Buffer) {
@@ -2260,7 +2400,7 @@ async function readOpenAiResponse(response: globalThis.Response): Promise<OpenAi
   }
 }
 
-function extractOpenAiFailureFromResponse(status: number, body: OpenAiImagesResponse) {
+function extractOpenAiFailureFromResponse(status: number, body: { error?: OpenAiErrorPayload }) {
   const providerCode = body.error?.code ?? null;
   const providerType = body.error?.type ?? null;
   const providerMessage = body.error?.message ?? null;
@@ -2547,6 +2687,57 @@ function parseSize(size: string) {
     return [1024, 1536] as const;
   }
   return [Number(match[1]), Number(match[2])] as const;
+}
+
+function normalizeOpenAiSize(size: string) {
+  const normalized = normalizeImageDimensions(...parseSize(size));
+  return `${normalized.width}x${normalized.height}`;
+}
+
+function normalizeImageDimensions(width: number, height: number) {
+  const maxEdge = 3840;
+  const minPixels = 655_360;
+  const maxPixels = 8_294_400;
+  const maxAspectRatio = 3;
+
+  let nextWidth = width;
+  let nextHeight = height;
+
+  const longestEdge = Math.max(nextWidth, nextHeight);
+  if (longestEdge > maxEdge) {
+    const scale = maxEdge / longestEdge;
+    nextWidth *= scale;
+    nextHeight *= scale;
+  }
+
+  const aspectRatio = Math.max(nextWidth, nextHeight) / Math.max(1, Math.min(nextWidth, nextHeight));
+  if (aspectRatio > maxAspectRatio) {
+    if (nextWidth >= nextHeight) {
+      nextWidth = nextHeight * maxAspectRatio;
+    } else {
+      nextHeight = nextWidth * maxAspectRatio;
+    }
+  }
+
+  const pixels = nextWidth * nextHeight;
+  if (pixels > maxPixels) {
+    const scale = Math.sqrt(maxPixels / pixels);
+    nextWidth *= scale;
+    nextHeight *= scale;
+  } else if (pixels < minPixels) {
+    const scale = Math.sqrt(minPixels / Math.max(pixels, 1));
+    nextWidth *= scale;
+    nextHeight *= scale;
+  }
+
+  return {
+    width: roundToMultipleOf16(nextWidth),
+    height: roundToMultipleOf16(nextHeight),
+  };
+}
+
+function roundToMultipleOf16(value: number) {
+  return Math.max(16, Math.round(value / 16) * 16);
 }
 
 function getSessionExpiry(sessionData: session.SessionData) {

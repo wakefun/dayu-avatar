@@ -50,6 +50,11 @@ export type GenerationTask = {
   sourceTaskId: string | null;
 };
 
+export type CreateGenerationTaskResponse = {
+  task: GenerationTask;
+  tasks?: GenerationTask[];
+};
+
 export type GenerationResult = {
   id: string;
   taskId: string;

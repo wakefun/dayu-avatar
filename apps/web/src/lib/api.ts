@@ -1,4 +1,14 @@
-import type { Asset, GalleryItem, GenerationResult, GenerationTask, HistoryItem, QueueItem, SessionSummary, User } from './types';
+import type {
+  Asset,
+  CreateGenerationTaskResponse,
+  GalleryItem,
+  GenerationResult,
+  GenerationTask,
+  HistoryItem,
+  QueueItem,
+  SessionSummary,
+  User,
+} from './types';
 
 async function request<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
   const response = await fetch(input, {
@@ -52,13 +62,14 @@ export const api = {
     styleTags: string[];
     personalReferenceAssetId: string;
     styleReferenceAssetId: string | null;
+    quantity: number;
     generationParams: {
       model: string;
       quality: string;
       size: string;
       outputFormat: string;
     };
-  }) => request<{ task: GenerationTask }>('/api/generation-tasks', { method: 'POST', body: JSON.stringify(body) }),
+  }) => request<CreateGenerationTaskResponse>('/api/generation-tasks', { method: 'POST', body: JSON.stringify(body) }),
   getTask: (taskId: string) => request<{ task: GenerationTask }>(`/api/generation-tasks/${taskId}`),
   getTaskProgress: (taskId: string) =>
     request<{ taskId: string; status: GenerationTask['status']; progress: { percent: number; step: string | null; message: string } }>(

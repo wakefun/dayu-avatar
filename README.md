@@ -82,6 +82,7 @@ OpenAI-compatible generation keys:
 - `OPENAI_BASE_URL`
 - `OPENAI_API_KEY`
 - `OPENAI_IMAGE_MODEL` default `gpt-image-2`
+- `OPENAI_PROMPT_MODEL` default `gpt-5.5`; used through `/v1/chat/completions` to analyze reference images and generate the final image prompt before calling image edits
 - `OPENAI_IMAGE_QUALITY` default `high`
 - `OPENAI_REQUEST_TIMEOUT_MS` request/download timeout in milliseconds, default `600000` (10 minutes); invalid or non-positive values fall back to the default
 

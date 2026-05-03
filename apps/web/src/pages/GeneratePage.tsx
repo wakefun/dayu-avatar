@@ -62,6 +62,8 @@ const resolutionOptions = [
 ] as const;
 
 const quantityOptions = [
+  { value: '1', label: '1' },
+  { value: '2', label: '2' },
   { value: '4', label: '4' },
   { value: '8', label: '8' },
 ] as const;
@@ -85,11 +87,9 @@ export function GeneratePage() {
   const [insertedStyleTags, setInsertedStyleTags] = useState<string[]>([]);
   const [ratio, setRatio] = useState<RatioValue>('3:4');
   const [resolution, setResolution] = useState<ResolutionValue>('1k');
-  const [quantity, setQuantity] = useState<QuantityValue>('4');
+  const [quantity, setQuantity] = useState<QuantityValue>('1');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const previewAsset = personalAsset ?? styleAsset;
 
   const handleInsertSuggestion = (tag: string) => {
     const suggestion = styleSuggestions.find((item) => item.tag === tag);
@@ -122,16 +122,6 @@ export function GeneratePage() {
           <span className="eyebrow">大宇头像</span>
           <h2 className="home-hero-title">生成头像</h2>
           <p className="home-hero-description">上传人物与风格参考，生成适合社交媒体与个人表达的高级头像作品。</p>
-        </div>
-        <div className="hero-art-frame">
-          {previewAsset ? (
-            <img className="hero-art-image" src={previewAsset.fileUrl} alt={previewAsset.fileName} />
-          ) : (
-            <div className="hero-art-placeholder" aria-hidden="true">
-              <div className="hero-art-orb" />
-              <div className="avatar-mark large">AI</div>
-            </div>
-          )}
         </div>
       </section>
 
@@ -171,12 +161,12 @@ export function GeneratePage() {
         <p className="prompt-helper">你可以自由补充人物气质、光线、色调、构图或想要突出的情绪表达。</p>
       </PageSection>
 
-      <PageSection title="生成设置" subtitle="选择更接近 Stitch 的生成偏好，当前 MVP 仍以稳定的高清单图输出为主。">
+      <PageSection title="生成设置" subtitle="选择更接近 Stitch 的生成偏好，数量大于 1 时会并发创建多条任务，而不是在一次请求中批量返回多图。">
         <div className="settings-stack">
           <SegmentedControl label="图片比例" options={ratioOptions} value={ratio} onChange={setRatio} />
           <SegmentedControl label="图片分辨率" options={resolutionOptions} value={resolution} onChange={setResolution} />
           <SegmentedControl label="生成数量" options={quantityOptions} value={quantity} onChange={setQuantity} />
-          <p className="section-helper">当前 MVP 每次提交稳定返回 1 张最终成图；2K / 4K 与 4 / 8 作为偏好选项已保留，后续可接入更完整的多图与高分辨率能力。</p>
+          <p className="section-helper">默认生成 1 张。高分辨率会按比例换算成合法尺寸，并规范到 16 的倍数；当数量大于 1 时，你会进入任务队列统一查看每张结果。</p>
         </div>
         {error ? <div className="error-text">{error}</div> : null}
         <button
@@ -197,13 +187,18 @@ export function GeneratePage() {
                 styleTags: insertedStyleTags,
                 personalReferenceAssetId: personalAsset.id,
                 styleReferenceAssetId: styleAsset?.id ?? null,
+                quantity: Number(quantity),
                 generationParams: {
                   model: 'gpt-image-2',
                   quality: 'high',
-                  size: mapRatioToSize(ratio, resolution),
+                  size: normalizeImageSize(ratio, resolution),
                   outputFormat: 'png',
                 },
               });
+              if ((response.tasks?.length ?? 0) > 1) {
+                navigate('/queue');
+                return;
+              }
               navigate(`/generate/loading/${response.task.id}`);
             } catch (requestError) {
               setError(requestError instanceof Error ? requestError.message : '创建任务失败');
@@ -251,15 +246,75 @@ function appendPromptSnippet(prompt: string, snippet: string) {
   return `${normalizedPrompt}\n\n${snippet}`;
 }
 
-function mapRatioToSize(ratio: RatioValue, resolution: ResolutionValue) {
-  if (resolution !== '1k') {
-    return mapRatioToSize(ratio, '1k');
+function normalizeImageSize(ratio: RatioValue, resolution: ResolutionValue) {
+  const base = getResolutionBase(resolution);
+  const { width, height } = getRatioDimensions(ratio, base);
+  const normalized = normalizeSize(width, height);
+  return `${normalized.width}x${normalized.height}`;
+}
+
+function getResolutionBase(resolution: ResolutionValue) {
+  if (resolution === '4k') {
+    return 3840;
   }
+  if (resolution === '2k') {
+    return 2048;
+  }
+  return 1024;
+}
+
+function getRatioDimensions(ratio: RatioValue, base: number) {
   if (ratio === '1:1') {
-    return '1024x1024';
+    return { width: base, height: base };
   }
   if (ratio === '9:16') {
-    return '1024x1792';
+    return { width: (base * 9) / 16, height: base };
   }
-  return '1024x1536';
+  return { width: (base * 3) / 4, height: base };
+}
+
+function normalizeSize(width: number, height: number) {
+  const maxEdge = 3840;
+  const minPixels = 655_360;
+  const maxPixels = 8_294_400;
+  const maxAspectRatio = 3;
+
+  let nextWidth = width;
+  let nextHeight = height;
+
+  const longestEdge = Math.max(nextWidth, nextHeight);
+  if (longestEdge > maxEdge) {
+    const scale = maxEdge / longestEdge;
+    nextWidth *= scale;
+    nextHeight *= scale;
+  }
+
+  const aspectRatio = Math.max(nextWidth, nextHeight) / Math.max(1, Math.min(nextWidth, nextHeight));
+  if (aspectRatio > maxAspectRatio) {
+    if (nextWidth >= nextHeight) {
+      nextWidth = nextHeight * maxAspectRatio;
+    } else {
+      nextHeight = nextWidth * maxAspectRatio;
+    }
+  }
+
+  const pixels = nextWidth * nextHeight;
+  if (pixels > maxPixels) {
+    const scale = Math.sqrt(maxPixels / pixels);
+    nextWidth *= scale;
+    nextHeight *= scale;
+  } else if (pixels < minPixels) {
+    const scale = Math.sqrt(minPixels / Math.max(pixels, 1));
+    nextWidth *= scale;
+    nextHeight *= scale;
+  }
+
+  return {
+    width: roundToMultipleOf16(nextWidth),
+    height: roundToMultipleOf16(nextHeight),
+  };
+}
+
+function roundToMultipleOf16(value: number) {
+  return Math.max(16, Math.round(value / 16) * 16);
 }

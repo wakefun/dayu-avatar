@@ -269,46 +269,6 @@ span {
   margin: 0;
 }
 
-.hero-art-frame {
-  width: min(100%, 250px);
-  aspect-ratio: 4 / 5;
-  padding: 14px;
-  border-radius: 32px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(245, 243, 238, 0.72));
-  border: 1px solid rgba(138, 124, 116, 0.12);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 20px 42px rgba(193, 204, 228, 0.22);
-}
-
-.hero-art-image,
-.hero-art-placeholder {
-  width: 100%;
-  height: 100%;
-  border-radius: 24px;
-}
-
-.hero-art-image {
-  object-fit: cover;
-  display: block;
-}
-
-.hero-art-placeholder {
-  display: grid;
-  place-items: center;
-  position: relative;
-  overflow: hidden;
-  background: radial-gradient(circle at top, rgba(255, 255, 255, 0.95), rgba(231, 237, 250, 0.82) 45%, rgba(249, 236, 227, 0.8) 100%);
-}
-
-.hero-art-orb {
-  position: absolute;
-  width: 70%;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.95), rgba(212, 224, 248, 0.58) 50%, rgba(247, 224, 209, 0.78));
-  filter: blur(2px);
-}
-
-
 .section-head {
   margin-bottom: 12px;
 }
