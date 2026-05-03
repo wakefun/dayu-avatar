@@ -1,0 +1,19 @@
+{
+  "name": "大宇头像",
+  "short_name": "大宇头像",
+  "description": "生成、收藏并设置你的个性化头像作品。",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fdf8f6",
+  "theme_color": "#cfa983",
+  "icons": [
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

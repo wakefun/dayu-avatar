@@ -20,6 +20,11 @@ const titles: Record<string, string> = {
   '/settings': '账户设置',
 };
 
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
+};
+
 export function App() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -27,13 +32,19 @@ export function App() {
   const [session, setSession] = useState<SessionSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+
+  const refreshSession = async () => {
+    const response = await api.me();
+    setUser(response.user);
+    setSession(response.session);
+    return response;
+  };
 
   useEffect(() => {
     void (async () => {
       try {
-        const response = await api.me();
-        setUser(response.user);
-        setSession(response.session);
+        const response = await refreshSession();
         if (!response.user && location.pathname !== '/login') {
           navigate('/login', { replace: true });
         }
@@ -48,6 +59,16 @@ export function App() {
       }
     })();
   }, [location.pathname, navigate]);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault();
+      setInstallPrompt(event as BeforeInstallPromptEvent);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
 
   const title = useMemo(() => {
     if (location.pathname.startsWith('/generate/loading')) {
@@ -73,13 +94,29 @@ export function App() {
   }
 
   return (
-    <AppShell title={title} user={user} drawerOpen={drawerOpen} onOpenDrawer={() => setDrawerOpen(true)} onCloseDrawer={() => setDrawerOpen(false)}>
+    <AppShell
+      title={title}
+      user={user}
+      drawerOpen={drawerOpen}
+      installAvailable={Boolean(installPrompt)}
+      onOpenDrawer={() => setDrawerOpen(true)}
+      onCloseDrawer={() => setDrawerOpen(false)}
+      onInstallApp={async () => {
+        setDrawerOpen(false);
+        if (!installPrompt) {
+          return;
+        }
+        await installPrompt.prompt();
+        await installPrompt.userChoice;
+        setInstallPrompt(null);
+      }}
+    >
       <Routes>
         <Route path="/login" element={<Navigate to="/" replace />} />
         <Route path="/" element={<GeneratePage />} />
         <Route path="/generate/loading/:taskId" element={<LoadingPage />} />
         <Route path="/generate/result/:taskId" element={<ResultPage />} />
-        <Route path="/gallery" element={<GalleryPage />} />
+        <Route path="/gallery" element={<GalleryPage onUserUpdated={setUser} />} />
         <Route path="/queue" element={<QueuePage />} />
         <Route path="/history" element={<HistoryPage />} />
         <Route

@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ChipGroup } from '../components/ChipGroup';
+import { ImageLightbox } from '../components/ImageLightbox';
 import { PageSection } from '../components/PageSection';
 import { UploadCard } from '../components/UploadCard';
 import { api } from '../lib/api';
@@ -72,6 +73,17 @@ type RatioValue = (typeof ratioOptions)[number]['value'];
 type ResolutionValue = (typeof resolutionOptions)[number]['value'];
 type QuantityValue = (typeof quantityOptions)[number]['value'];
 
+type GeneratePrefillState = {
+  prompt?: string;
+  styleTags?: string[];
+  personalReferenceAssets?: Asset[];
+  styleReferenceAssets?: Asset[];
+  generationParams?: {
+    size?: string;
+  };
+  quantity?: number;
+};
+
 type SegmentedControlProps<T extends string> = {
   label: string;
   options: readonly { value: T; label: string }[];
@@ -81,8 +93,9 @@ type SegmentedControlProps<T extends string> = {
 
 export function GeneratePage() {
   const navigate = useNavigate();
-  const [personalAsset, setPersonalAsset] = useState<Asset | null>(null);
-  const [styleAsset, setStyleAsset] = useState<Asset | null>(null);
+  const location = useLocation();
+  const [personalAssets, setPersonalAssets] = useState<Asset[]>([]);
+  const [styleAssets, setStyleAssets] = useState<Asset[]>([]);
   const [prompt, setPrompt] = useState('');
   const [insertedStyleTags, setInsertedStyleTags] = useState<string[]>([]);
   const [ratio, setRatio] = useState<RatioValue>('3:4');
@@ -90,6 +103,24 @@ export function GeneratePage() {
   const [quantity, setQuantity] = useState<QuantityValue>('1');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
+
+  useEffect(() => {
+    const state = location.state as GeneratePrefillState | null;
+    if (!state) {
+      return;
+    }
+
+    setPrompt(state.prompt ?? '');
+    setInsertedStyleTags(state.styleTags ?? []);
+    setPersonalAssets((state.personalReferenceAssets ?? []).slice(0, 3));
+    setStyleAssets((state.styleReferenceAssets ?? []).slice(0, 3));
+    setQuantity(toQuantityValue(state.quantity));
+    const controls = parseControlsFromSize(state.generationParams?.size);
+    setRatio(controls.ratio);
+    setResolution(controls.resolution);
+    navigate('.', { replace: true, state: null });
+  }, [location.state, navigate]);
 
   const handleInsertSuggestion = (tag: string) => {
     const suggestion = styleSuggestions.find((item) => item.tag === tag);
@@ -106,10 +137,10 @@ export function GeneratePage() {
       setError(null);
       const response = await api.upload(file, category);
       if (category === 'personal_reference') {
-        setPersonalAsset(response.asset);
+        setPersonalAssets((current) => [...current, response.asset].slice(0, 3));
         return;
       }
-      setStyleAsset(response.asset);
+      setStyleAssets((current) => [...current, response.asset].slice(0, 3));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : '上传失败');
     }
@@ -117,22 +148,16 @@ export function GeneratePage() {
 
   return (
     <div className="stack-page">
-      <section className="section glass-card home-hero">
-        <div className="home-hero-copy">
-          <span className="eyebrow">大宇头像</span>
-          <h2 className="home-hero-title">生成头像</h2>
-          <p className="home-hero-description">上传人物与风格参考，生成适合社交媒体与个人表达的高级头像作品。</p>
-        </div>
-      </section>
-
       <PageSection title="个人形象参考图" subtitle="上传清晰正脸或半身照片，帮助 AI 保留你的个人特征。">
         <UploadCard
           title="个人形象参考图"
           description="建议选择光线自然、面部清晰、无遮挡的人像照片。"
           actionLabel="上传个人照片"
           iconLabel="人像"
-          value={personalAsset ? { fileName: personalAsset.fileName, fileUrl: personalAsset.fileUrl } : null}
-          onChange={(file) => void handleUpload(file, 'personal_reference')}
+          values={personalAssets}
+          onAdd={(file) => void handleUpload(file, 'personal_reference')}
+          onRemove={(assetId) => setPersonalAssets((current) => current.filter((asset) => asset.id !== assetId))}
+          onPreview={setPreviewAsset}
         />
       </PageSection>
 
@@ -142,8 +167,10 @@ export function GeneratePage() {
           description="可上传插画、摄影、杂志或艺术肖像作为风格灵感。"
           actionLabel="上传风格参考"
           iconLabel="风格"
-          value={styleAsset ? { fileName: styleAsset.fileName, fileUrl: styleAsset.fileUrl } : null}
-          onChange={(file) => void handleUpload(file, 'style_reference')}
+          values={styleAssets}
+          onAdd={(file) => void handleUpload(file, 'style_reference')}
+          onRemove={(assetId) => setStyleAssets((current) => current.filter((asset) => asset.id !== assetId))}
+          onPreview={setPreviewAsset}
         />
       </PageSection>
 
@@ -172,9 +199,9 @@ export function GeneratePage() {
         <button
           type="button"
           className="primary-button primary-cta"
-          disabled={!personalAsset || submitting}
+          disabled={personalAssets.length === 0 || submitting}
           onClick={async () => {
-            if (!personalAsset) {
+            if (personalAssets.length === 0) {
               setError('请先上传个人形象参考图');
               return;
             }
@@ -185,8 +212,8 @@ export function GeneratePage() {
               const response = await api.createTask({
                 prompt,
                 styleTags: insertedStyleTags,
-                personalReferenceAssetId: personalAsset.id,
-                styleReferenceAssetId: styleAsset?.id ?? null,
+                personalReferenceAssetIds: personalAssets.map((asset) => asset.id),
+                styleReferenceAssetIds: styleAssets.map((asset) => asset.id),
                 quantity: Number(quantity),
                 generationParams: {
                   model: 'gpt-image-2',
@@ -211,6 +238,10 @@ export function GeneratePage() {
         </button>
         <p className="section-helper">预计 30-60 秒完成，可在任务队列中查看进度。</p>
       </PageSection>
+      <ImageLightbox
+        image={previewAsset ? { src: previewAsset.fileUrl, alt: previewAsset.fileName, width: previewAsset.width, height: previewAsset.height } : null}
+        onClose={() => setPreviewAsset(null)}
+      />
     </div>
   );
 }
@@ -317,4 +348,25 @@ function normalizeSize(width: number, height: number) {
 
 function roundToMultipleOf16(value: number) {
   return Math.max(16, Math.round(value / 16) * 16);
+}
+
+function parseControlsFromSize(size: string | undefined): { ratio: RatioValue; resolution: ResolutionValue } {
+  const match = size?.match(/^(\d+)x(\d+)$/);
+  if (!match) {
+    return { ratio: '3:4', resolution: '1k' };
+  }
+
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  const ratioValue = width === height ? '1:1' : width / height < 0.65 ? '9:16' : '3:4';
+  const longest = Math.max(width, height);
+  const resolutionValue = longest >= 3600 ? '4k' : longest >= 1900 ? '2k' : '1k';
+  return { ratio: ratioValue, resolution: resolutionValue };
+}
+
+function toQuantityValue(value: number | undefined): QuantityValue {
+  if (value === 2 || value === 4 || value === 8) {
+    return String(value) as QuantityValue;
+  }
+  return '1';
 }

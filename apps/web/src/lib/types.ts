@@ -28,9 +28,14 @@ export type GenerationTask = {
   id: string;
   status: 'queued' | 'processing' | 'completed' | 'failed' | 'canceled';
   prompt: string;
+  promptSummary: string;
   styleTags: string[];
   personalReferenceAssetId: string;
   styleReferenceAssetId: string | null;
+  personalReferenceAssetIds: string[];
+  styleReferenceAssetIds: string[];
+  personalReferenceAssets: Asset[];
+  styleReferenceAssets: Asset[];
   generationParams: {
     model: string;
     quality: string;
@@ -69,6 +74,7 @@ export type GenerationResult = {
 export type QueueItem = {
   id: string;
   status: GenerationTask['status'];
+  summary: string;
   progress: {
     percent: number;
     step: string | null;
@@ -82,6 +88,10 @@ export type HistoryItem = {
   id: string;
   status: GenerationTask['status'];
   promptSummary: string;
+  prompt: string;
+  styleTags: string[];
+  personalReferenceAssets: Asset[];
+  styleReferenceAssets: Asset[];
   referenceTypes: string[];
   generationParams: {
     model: string;
@@ -100,6 +110,8 @@ export type GalleryItem = {
   taskId: string;
   imageUrl: string;
   thumbnailUrl: string | null;
+  width: number | null;
+  height: number | null;
   isFavorited: boolean;
   savedAt: string;
 };

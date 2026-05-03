@@ -17,20 +17,22 @@ export function SettingsPage({ user, session, onLogout }: SettingsPageProps) {
     <div className="stack-page">
       <PageSection title="账户设置" subtitle="查看当前用户信息、登录状态与退出入口。">
         <div className="settings-card">
-          <div className="avatar-mark large">{user.displayName.slice(0, 1)}</div>
+          <div className="avatar-mark large" style={user.avatarUrl ? { backgroundImage: `url(${user.avatarUrl})` } : undefined}>
+            {user.avatarUrl ? null : user.displayName.slice(0, 1)}
+          </div>
           <div>
             <strong>{user.displayName}</strong>
             <p>{user.email ?? '未提供邮箱'}</p>
             <small>{authModeLabel}</small>
           </div>
         </div>
-        <div className="list-card">
+        <div className="list-card app-info-card">
           <strong>应用信息</strong>
-          <p>Dayu Avatar MVP · React + Express + SQLite</p>
+          <p>大宇头像会根据你的个人形象参考图和喜欢的风格，生成适合社交头像、个人主页和日常表达的精致头像作品。你可以保存喜欢的结果到图库，也可以随时设置为当前头像。</p>
         </div>
         <button
           type="button"
-          className="secondary-button danger"
+          className="logout-button"
           onClick={async () => {
             const response = await api.logout();
             onLogout();

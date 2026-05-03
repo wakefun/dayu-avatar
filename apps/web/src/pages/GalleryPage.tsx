@@ -1,22 +1,34 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../lib/api';
-import type { GalleryItem } from '../lib/types';
 import { GalleryCard } from '../components/Cards';
+import { ImageLightbox } from '../components/ImageLightbox';
 import { PageSection } from '../components/PageSection';
+import { api } from '../lib/api';
+import type { GalleryItem, User } from '../lib/types';
 
-export function GalleryPage() {
+type GalleryPageProps = {
+  onUserUpdated: (user: User) => void;
+};
+
+export function GalleryPage({ onUserUpdated }: GalleryPageProps) {
   const navigate = useNavigate();
   const [items, setItems] = useState<GalleryItem[]>([]);
+  const [activeItem, setActiveItem] = useState<GalleryItem | null>(null);
 
   const load = async () => {
     const response = await api.getGallery();
     setItems(response.items);
+    setActiveItem((current) => (current ? response.items.find((item) => item.id === current.id) ?? null : null));
   };
 
   useEffect(() => {
     void load();
   }, []);
+
+  const updateFavorite = async (item: GalleryItem) => {
+    await api.updateGallery(item.id, !item.isFavorited);
+    await load();
+  };
 
   return (
     <div className="stack-page">
@@ -30,24 +42,52 @@ export function GalleryPage() {
             </button>
           </div>
         ) : (
-          <div className="gallery-grid">
+          <div className="gallery-masonry">
             {items.map((item) => (
-              <GalleryCard
-                key={item.id}
-                item={item}
-                onFavorite={async (itemId, next) => {
-                  await api.updateGallery(itemId, next);
-                  await load();
-                }}
-                onDelete={async (itemId) => {
-                  await api.deleteGallery(itemId);
-                  await load();
-                }}
-              />
+              <GalleryCard key={item.id} item={item} onOpen={setActiveItem} />
             ))}
           </div>
         )}
       </PageSection>
+      <ImageLightbox
+        image={
+          activeItem
+            ? {
+                src: activeItem.imageUrl,
+                alt: '已保存头像作品',
+                width: activeItem.width,
+                height: activeItem.height,
+                meta: `生成时间 ${new Date(activeItem.savedAt).toLocaleString()}`,
+              }
+            : null
+        }
+        actions={
+          activeItem
+            ? [
+                { label: activeItem.isFavorited ? '取消收藏' : '收藏', onClick: () => void updateFavorite(activeItem) },
+                {
+                  label: '设置为我的头像',
+                  variant: 'primary',
+                  onClick: async () => {
+                    const response = await api.setAvatarFromGallery(activeItem.id);
+                    onUserUpdated(response.user);
+                  },
+                },
+                { label: '下载', href: `/api/gallery-items/${activeItem.id}/download` },
+                {
+                  label: '删除',
+                  variant: 'danger',
+                  onClick: async () => {
+                    await api.deleteGallery(activeItem.id);
+                    setActiveItem(null);
+                    await load();
+                  },
+                },
+              ]
+            : []
+        }
+        onClose={() => setActiveItem(null)}
+      />
     </div>
   );
 }

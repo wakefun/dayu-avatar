@@ -54,8 +54,11 @@ type TaskRow = {
   status: TaskStatus;
   prompt: string;
   style_tags_json: string;
+  summary: string | null;
   personal_reference_asset_id: string;
   style_reference_asset_id: string | null;
+  personal_reference_asset_ids_json: string | null;
+  style_reference_asset_ids_json: string | null;
   model: string;
   quality: string;
   size: string;
@@ -521,59 +524,82 @@ app.get('/api/uploads/:assetId', requireAuth, (req, res) => {
   res.json({ asset: mapAsset(asset) });
 });
 
-app.post('/api/generation-tasks', requireAuth, (req, res) => {
-  const personalReferenceAssetId = req.body?.personalReferenceAssetId;
-  const styleReferenceAssetId = req.body?.styleReferenceAssetId ?? null;
-  const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
-  const styleTags = Array.isArray(req.body?.styleTags)
-    ? req.body.styleTags.filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
-    : [];
-  const requestedQuantity = Number(req.body?.quantity ?? 1);
-  const quantity = Number.isFinite(requestedQuantity) ? Math.max(1, Math.min(8, Math.floor(requestedQuantity))) : 1;
-  const generationParams = req.body?.generationParams ?? {};
+app.post('/api/generation-tasks', requireAuth, async (req, res, next) => {
+  try {
+    const personalReferenceAssetIds = normalizeAssetIdList(req.body?.personalReferenceAssetIds, req.body?.personalReferenceAssetId, 3);
+    const styleReferenceAssetIds = normalizeAssetIdList(req.body?.styleReferenceAssetIds, req.body?.styleReferenceAssetId ?? null, 3);
+    const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
+    const styleTags = Array.isArray(req.body?.styleTags)
+      ? req.body.styleTags.filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
+      : [];
+    const requestedQuantity = Number(req.body?.quantity ?? 1);
+    const quantity = Number.isFinite(requestedQuantity) ? Math.max(1, Math.min(8, Math.floor(requestedQuantity))) : 1;
+    const generationParams = req.body?.generationParams ?? {};
 
-  if (typeof personalReferenceAssetId !== 'string') {
-    sendError(res, 400, 'VALIDATION_ERROR', 'personalReferenceAssetId is required');
-    return;
-  }
-
-  const personalAsset = getOwnedAsset(req.session.userId!, personalReferenceAssetId);
-  if (!personalAsset || personalAsset.category !== 'personal_reference') {
-    sendError(res, 400, 'VALIDATION_ERROR', 'personal reference asset is invalid');
-    return;
-  }
-
-  if (styleReferenceAssetId) {
-    const styleAsset = getOwnedAsset(req.session.userId!, styleReferenceAssetId);
-    if (!styleAsset || styleAsset.category !== 'style_reference') {
-      sendError(res, 400, 'VALIDATION_ERROR', 'style reference asset is invalid');
+    if (personalReferenceAssetIds.length === 0) {
+      sendError(res, 400, 'VALIDATION_ERROR', 'personalReferenceAssetIds is required');
       return;
     }
-  }
 
-  const tasks = Array.from({ length: quantity }, () =>
-    createGenerationTask({
-      userId: req.session.userId!,
+    for (const assetId of personalReferenceAssetIds) {
+      const personalAsset = getOwnedAsset(req.session.userId!, assetId);
+      if (!personalAsset || personalAsset.category !== 'personal_reference') {
+        sendError(res, 400, 'VALIDATION_ERROR', 'personal reference asset is invalid');
+        return;
+      }
+    }
+
+    for (const assetId of styleReferenceAssetIds) {
+      const styleAsset = getOwnedAsset(req.session.userId!, assetId);
+      if (!styleAsset || styleAsset.category !== 'style_reference') {
+        sendError(res, 400, 'VALIDATION_ERROR', 'style reference asset is invalid');
+        return;
+      }
+    }
+
+    const model = typeof generationParams.model === 'string' ? generationParams.model : defaultImageModel;
+    const quality = typeof generationParams.quality === 'string' ? generationParams.quality : defaultImageQuality;
+    const size = normalizeOpenAiSize(typeof generationParams.size === 'string' ? generationParams.size : '1024x1536');
+    const outputFormat = typeof generationParams.outputFormat === 'string' ? generationParams.outputFormat : 'png';
+    const summary = await createTaskSummary({
       prompt,
       styleTags,
-      personalReferenceAssetId,
-      styleReferenceAssetId,
-      model: typeof generationParams.model === 'string' ? generationParams.model : defaultImageModel,
-      quality: typeof generationParams.quality === 'string' ? generationParams.quality : defaultImageQuality,
-      size: normalizeOpenAiSize(typeof generationParams.size === 'string' ? generationParams.size : '1024x1536'),
-      outputFormat: typeof generationParams.outputFormat === 'string' ? generationParams.outputFormat : 'png',
-      sourceTaskId: null,
-    })
-  );
+      personalReferenceCount: personalReferenceAssetIds.length,
+      styleReferenceCount: styleReferenceAssetIds.length,
+      model,
+      quality,
+      size,
+    });
 
-  for (const task of tasks) {
-    void startGenerationRun(task.id);
+    const tasks = Array.from({ length: quantity }, () =>
+      createGenerationTask({
+        userId: req.session.userId!,
+        prompt,
+        styleTags,
+        summary,
+        personalReferenceAssetId: personalReferenceAssetIds[0]!,
+        styleReferenceAssetId: styleReferenceAssetIds[0] ?? null,
+        personalReferenceAssetIds,
+        styleReferenceAssetIds,
+        model,
+        quality,
+        size,
+        outputFormat,
+        sourceTaskId: null,
+      })
+    );
+
+    for (const task of tasks) {
+      void startGenerationRun(task.id);
+    }
+
+    res.status(201).json({
+      task: mapTask(tasks[0]!),
+      tasks: tasks.map((task) => mapTask(task)),
+    });
+  } catch (error) {
+    next(error);
   }
-
-  res.status(201).json({
-    task: mapTask(tasks[0]!),
-    tasks: tasks.map((task) => mapTask(task)),
-  });
 });
 
 
@@ -653,12 +679,23 @@ app.post('/api/generation-tasks/:taskId/retry', requireAuth, (req, res) => {
     return;
   }
 
+  const personalReferenceAssetIds = getTaskReferenceAssetIds(sourceTask, 'personal');
+  const styleReferenceAssetIds = getTaskReferenceAssetIds(sourceTask, 'style');
   const task = createGenerationTask({
     userId: sourceTask.user_id,
     prompt: sourceTask.prompt,
-    styleTags: JSON.parse(sourceTask.style_tags_json) as string[],
-    personalReferenceAssetId: sourceTask.personal_reference_asset_id,
-    styleReferenceAssetId: sourceTask.style_reference_asset_id,
+    styleTags: parseStoredStyleTags(sourceTask.style_tags_json),
+    summary: sourceTask.summary ?? buildFallbackTaskSummary({
+      prompt: sourceTask.prompt,
+      styleTags: parseStoredStyleTags(sourceTask.style_tags_json),
+      personalReferenceCount: personalReferenceAssetIds.length,
+      styleReferenceCount: styleReferenceAssetIds.length,
+      size: sourceTask.size,
+    }),
+    personalReferenceAssetId: personalReferenceAssetIds[0]!,
+    styleReferenceAssetId: styleReferenceAssetIds[0] ?? null,
+    personalReferenceAssetIds,
+    styleReferenceAssetIds,
     model: sourceTask.model,
     quality: sourceTask.quality,
     size: sourceTask.size,
@@ -666,6 +703,7 @@ app.post('/api/generation-tasks/:taskId/retry', requireAuth, (req, res) => {
     sourceTaskId: sourceTask.id,
   });
 
+  void startGenerationRun(task.id);
   res.status(201).json({ task: mapTask(task) });
 });
 
@@ -680,6 +718,7 @@ app.get('/api/queue', requireAuth, async (req, res, next) => {
       items: rows.map((task) => ({
         id: task.id,
         status: task.status,
+        summary: getTaskSummary(task),
         progress: {
           percent: task.progress_percent,
           step: task.progress_step,
@@ -712,7 +751,11 @@ app.get('/api/history', requireAuth, async (req, res, next) => {
       items: rows.map((task) => ({
         id: task.id,
         status: task.status,
-        promptSummary: task.prompt || '未填写提示词',
+        promptSummary: getTaskSummary(task),
+        prompt: task.prompt,
+        styleTags: parseStoredStyleTags(task.style_tags_json),
+        personalReferenceAssets: getTaskReferenceAssets(task, 'personal'),
+        styleReferenceAssets: getTaskReferenceAssets(task, 'style'),
         referenceTypes: task.style_reference_asset_id ? ['personal_reference', 'style_reference'] : ['personal_reference'],
         generationParams: {
           model: task.model,
@@ -733,7 +776,8 @@ app.get('/api/history', requireAuth, async (req, res, next) => {
 app.get('/api/gallery-items', requireAuth, (req, res) => {
   const rows = db
     .prepare(
-      `SELECT g.*, r.task_id, image_asset.public_url as image_url, thumb_asset.public_url as thumbnail_url
+      `SELECT g.*, r.task_id, image_asset.public_url as image_url, image_asset.width as image_width, image_asset.height as image_height,
+              thumb_asset.public_url as thumbnail_url
        FROM gallery_items g
        JOIN generation_results r ON r.id = g.generation_result_id
        JOIN file_assets image_asset ON image_asset.id = r.image_asset_id
@@ -741,7 +785,7 @@ app.get('/api/gallery-items', requireAuth, (req, res) => {
        WHERE g.user_id = ?
        ORDER BY datetime(g.saved_at) DESC`
     )
-    .all(req.session.userId!) as Array<GalleryRow & { task_id: string; image_url: string; thumbnail_url: string | null }>;
+    .all(req.session.userId!) as Array<GalleryRow & { task_id: string; image_url: string; image_width: number | null; image_height: number | null; thumbnail_url: string | null }>;
 
   res.json({
     items: rows.map((item) => ({
@@ -750,6 +794,8 @@ app.get('/api/gallery-items', requireAuth, (req, res) => {
       taskId: item.task_id,
       imageUrl: item.image_url,
       thumbnailUrl: item.thumbnail_url,
+      width: item.image_width,
+      height: item.image_height,
       isFavorited: Boolean(item.is_favorited),
       savedAt: item.saved_at,
     })),
@@ -809,6 +855,27 @@ app.patch('/api/gallery-items/:itemId', requireAuth, (req, res) => {
   const isFavorited = Boolean(req.body?.isFavorited);
   db.prepare('UPDATE gallery_items SET is_favorited = ? WHERE id = ?').run(isFavorited ? 1 : 0, item.id);
   res.json({ item: mapGalleryItem(item.id) });
+});
+
+app.post('/api/users/me/avatar', requireAuth, (req, res) => {
+  const galleryItemId = typeof req.body?.galleryItemId === 'string' ? req.body.galleryItemId : '';
+  const row = db
+    .prepare(
+      `SELECT image_asset.id as asset_id
+       FROM gallery_items g
+       JOIN generation_results r ON r.id = g.generation_result_id
+       JOIN file_assets image_asset ON image_asset.id = r.image_asset_id
+       WHERE g.id = ? AND g.user_id = ?`
+    )
+    .get(galleryItemId, req.session.userId!) as { asset_id: string } | undefined;
+
+  if (!row) {
+    sendError(res, 404, 'NOT_FOUND', 'gallery item not found');
+    return;
+  }
+
+  db.prepare('UPDATE users SET avatar_asset_id = ?, updated_at = ? WHERE id = ?').run(row.asset_id, nowIso(), req.session.userId!);
+  res.json({ user: mapUser(getUser(req.session.userId!)!) });
 });
 
 app.delete('/api/gallery-items/:itemId', requireAuth, (req, res) => {
@@ -916,8 +983,11 @@ function initSchema() {
       status TEXT NOT NULL,
       prompt TEXT NOT NULL,
       style_tags_json TEXT NOT NULL,
+      summary TEXT,
       personal_reference_asset_id TEXT NOT NULL,
       style_reference_asset_id TEXT,
+      personal_reference_asset_ids_json TEXT,
+      style_reference_asset_ids_json TEXT,
       model TEXT NOT NULL,
       quality TEXT NOT NULL,
       size TEXT NOT NULL,
@@ -949,6 +1019,18 @@ function initSchema() {
       saved_at TEXT NOT NULL
     );
   `);
+  ensureColumn('generation_tasks', 'summary', 'TEXT');
+  ensureColumn('generation_tasks', 'personal_reference_asset_ids_json', 'TEXT');
+  ensureColumn('generation_tasks', 'style_reference_asset_ids_json', 'TEXT');
+}
+
+function ensureColumn(tableName: string, columnName: string, definition: string) {
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+  if (columns.some((column) => column.name === columnName)) {
+    return;
+  }
+
+  db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
 }
 
 function requireAuth(req: Request, res: Response, next: NextFunction) {
@@ -1104,12 +1186,95 @@ function createUploadedAsset(userId: string, category: 'personal_reference' | 's
   return getAsset(id)!;
 }
 
+function normalizeAssetIdList(value: unknown, fallback: unknown, maxCount: number) {
+  const rawValues = Array.isArray(value) ? value : typeof fallback === 'string' ? [fallback] : [];
+  return rawValues.filter((assetId): assetId is string => typeof assetId === 'string' && assetId.trim().length > 0).slice(0, maxCount);
+}
+
+async function createTaskSummary(input: {
+  prompt: string;
+  styleTags: string[];
+  personalReferenceCount: number;
+  styleReferenceCount: number;
+  model: string;
+  quality: string;
+  size: string;
+}) {
+  const fallback = buildFallbackTaskSummary(input);
+  if (!openAiApiKey || !openAiBaseUrl) {
+    return fallback;
+  }
+
+  try {
+    const response = await fetch(buildOpenAiChatCompletionsUrl(openAiBaseUrl), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${openAiApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: defaultPromptModel,
+        messages: [
+          {
+            role: 'system',
+            content: 'Return one short Chinese description for an avatar generation task. Use 6 to 16 Chinese characters. No markdown, punctuation, quotes, or explanation.',
+          },
+          {
+            role: 'user',
+            content: [
+              `User prompt: ${input.prompt || '未填写'}`,
+              `Style tags: ${input.styleTags.length > 0 ? input.styleTags.join(' / ') : '无'}`,
+              `Personal reference images: ${input.personalReferenceCount}`,
+              `Style reference images: ${input.styleReferenceCount}`,
+              `Output size: ${input.size}`,
+            ].join('\n'),
+          },
+        ],
+      }),
+      signal: AbortSignal.timeout(Math.min(openAiRequestTimeoutMs, 20_000)),
+    });
+
+    const payload = await readOpenAiChatResponse(response);
+    if (!response.ok) {
+      return fallback;
+    }
+
+    return normalizeTaskSummary(extractPromptText(payload)) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function buildFallbackTaskSummary(input: { prompt: string; styleTags: string[]; personalReferenceCount: number; styleReferenceCount: number; size: string }) {
+  const source = input.styleTags.length > 0 ? input.styleTags.join('') : input.prompt.trim();
+  const normalized = normalizeTaskSummary(source);
+  if (normalized) {
+    return normalized;
+  }
+
+  const referenceCopy = input.styleReferenceCount > 0 ? '含风格参考' : '个人头像生成';
+  return normalizeTaskSummary(`${referenceCopy}${input.size}`) || '个人头像生成';
+}
+
+function normalizeTaskSummary(value: string) {
+  return value
+    .replace(/["'`“”‘’]/g, '')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/\s+/g, '')
+    .replace(/[。；;,.，、]+$/g, '')
+    .slice(0, 18);
+}
+
+
 function createGenerationTask(input: {
   userId: string;
   prompt: string;
   styleTags: string[];
+  summary: string;
   personalReferenceAssetId: string;
   styleReferenceAssetId: string | null;
+  personalReferenceAssetIds: string[];
+  styleReferenceAssetIds: string[];
   model: string;
   quality: string;
   size: string;
@@ -1120,17 +1285,20 @@ function createGenerationTask(input: {
   const now = nowIso();
   db.prepare(
     `INSERT INTO generation_tasks (
-      id, user_id, status, prompt, style_tags_json, personal_reference_asset_id, style_reference_asset_id,
-      model, quality, size, output_format, progress_percent, progress_step, error_code, error_message,
-      source_task_id, created_at, updated_at, completed_at
-    ) VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, 6, '排队中', NULL, NULL, ?, ?, ?, NULL)`
+      id, user_id, status, prompt, style_tags_json, summary, personal_reference_asset_id, style_reference_asset_id,
+      personal_reference_asset_ids_json, style_reference_asset_ids_json, model, quality, size, output_format,
+      progress_percent, progress_step, error_code, error_message, source_task_id, created_at, updated_at, completed_at
+    ) VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 6, '排队中', NULL, NULL, ?, ?, ?, NULL)`
   ).run(
     id,
     input.userId,
     input.prompt,
     JSON.stringify(input.styleTags),
+    input.summary,
     input.personalReferenceAssetId,
     input.styleReferenceAssetId,
+    JSON.stringify(input.personalReferenceAssetIds),
+    JSON.stringify(input.styleReferenceAssetIds),
     input.model,
     input.quality,
     input.size,
@@ -1152,12 +1320,16 @@ function ensureSeedTasks(userId: string) {
   const personalAsset = createSeedAsset(userId, 'personal_reference', 'seed-personal.png', [236, 214, 210]);
   const styleAsset = createSeedAsset(userId, 'style_reference', 'seed-style.png', [206, 218, 240]);
 
+  const completedPrompt = '清透写真 艺术肖像 自然光';
   const completed = createGenerationTask({
     userId,
-    prompt: '清透写真 艺术肖像 自然光',
+    prompt: completedPrompt,
     styleTags: ['清透写真', '艺术肖像', '自然光'],
+    summary: '清透自然光艺术肖像',
     personalReferenceAssetId: personalAsset.id,
     styleReferenceAssetId: styleAsset.id,
+    personalReferenceAssetIds: [personalAsset.id],
+    styleReferenceAssetIds: [styleAsset.id],
     model: defaultImageModel,
     quality: defaultImageQuality,
     size: '1024x1536',
@@ -1165,12 +1337,16 @@ function ensureSeedTasks(userId: string) {
     sourceTaskId: null,
   });
 
+  const failedPrompt = '高级杂志 胶片质感';
   const failed = createGenerationTask({
     userId,
-    prompt: '高级杂志 胶片质感',
+    prompt: failedPrompt,
     styleTags: ['高级杂志', '胶片质感'],
+    summary: '高级杂志胶片头像',
     personalReferenceAssetId: personalAsset.id,
     styleReferenceAssetId: styleAsset.id,
+    personalReferenceAssetIds: [personalAsset.id],
+    styleReferenceAssetIds: [styleAsset.id],
     model: defaultImageModel,
     quality: defaultImageQuality,
     size: '1024x1536',
@@ -1178,12 +1354,16 @@ function ensureSeedTasks(userId: string) {
     sourceTaskId: null,
   });
 
+  const canceledPrompt = '温柔奶油色 极简留白';
   const canceled = createGenerationTask({
     userId,
-    prompt: '温柔奶油色 极简留白',
+    prompt: canceledPrompt,
     styleTags: ['温柔奶油色', '极简留白'],
+    summary: '温柔奶油色极简头像',
     personalReferenceAssetId: personalAsset.id,
     styleReferenceAssetId: styleAsset.id,
+    personalReferenceAssetIds: [personalAsset.id],
+    styleReferenceAssetIds: [styleAsset.id],
     model: defaultImageModel,
     quality: defaultImageQuality,
     size: '1024x1536',
@@ -1480,8 +1660,10 @@ async function generateOpenAiImage(task: TaskRow): Promise<GeneratedImagePayload
 }
 
 function buildOpenAiEditRequestVariants(task: TaskRow, enhancedPrompt: string): OpenAiEditRequestVariant[] {
-  const personalAsset = getAsset(task.personal_reference_asset_id);
-  if (!personalAsset) {
+  const personalAssets = getTaskReferenceAssetIds(task, 'personal')
+    .map((assetId) => getAsset(assetId))
+    .filter((asset): asset is AssetRow => Boolean(asset));
+  if (personalAssets.length === 0) {
     throw createOpenAiGenerationFailure({
       status: null,
       providerCode: null,
@@ -1492,7 +1674,9 @@ function buildOpenAiEditRequestVariants(task: TaskRow, enhancedPrompt: string): 
     });
   }
 
-  const styleAsset = task.style_reference_asset_id ? getAsset(task.style_reference_asset_id) ?? null : null;
+  const styleAssets = getTaskReferenceAssetIds(task, 'style')
+    .map((assetId) => getAsset(assetId))
+    .filter((asset): asset is AssetRow => Boolean(asset));
   const outputFormat = normalizeOutputFormat(task.output_format);
   const baseFields = {
     model: task.model || defaultImageModel,
@@ -1500,11 +1684,10 @@ function buildOpenAiEditRequestVariants(task: TaskRow, enhancedPrompt: string): 
     size: normalizeOpenAiSize(task.size),
   } satisfies Record<string, string>;
 
-  const filesWithStyle = [
-    toOpenAiImageFile(personalAsset, 'personal-reference'),
-    ...(styleAsset ? [toOpenAiImageFile(styleAsset, 'style-reference')] : []),
-  ];
-  const filesWithoutStyle = [toOpenAiImageFile(personalAsset, 'personal-reference')];
+  const personalFiles = personalAssets.map((asset, index) => toOpenAiImageFile(asset, `personal-reference-${index + 1}`));
+  const styleFiles = styleAssets.map((asset, index) => toOpenAiImageFile(asset, `style-reference-${index + 1}`));
+  const filesWithStyle = [...personalFiles, ...styleFiles];
+  const filesWithoutStyle = personalFiles;
 
   const withQualityAndFormat = {
     ...baseFields,
@@ -1539,7 +1722,7 @@ function buildOpenAiEditRequestVariants(task: TaskRow, enhancedPrompt: string): 
     },
   ];
 
-  if (styleAsset) {
+  if (styleAssets.length > 0) {
     variants.push(
       {
         files: filesWithoutStyle,
@@ -1585,8 +1768,10 @@ function buildOpenAiChatCompletionsUrl(baseUrl: string) {
 }
 
 async function generateEnhancedOpenAiPrompt(task: TaskRow) {
-  const personalAsset = getAsset(task.personal_reference_asset_id);
-  if (!personalAsset) {
+  const personalAssets = getTaskReferenceAssetIds(task, 'personal')
+    .map((assetId) => getAsset(assetId))
+    .filter((asset): asset is AssetRow => Boolean(asset));
+  if (personalAssets.length === 0) {
     throw createOpenAiGenerationFailure({
       status: null,
       providerCode: null,
@@ -1597,7 +1782,9 @@ async function generateEnhancedOpenAiPrompt(task: TaskRow) {
     });
   }
 
-  const styleAsset = task.style_reference_asset_id ? getAsset(task.style_reference_asset_id) ?? null : null;
+  const styleAssets = getTaskReferenceAssetIds(task, 'style')
+    .map((assetId) => getAsset(assetId))
+    .filter((asset): asset is AssetRow => Boolean(asset));
   const response = await fetch(buildOpenAiChatCompletionsUrl(openAiBaseUrl), {
     method: 'POST',
     headers: {
@@ -1614,7 +1801,7 @@ async function generateEnhancedOpenAiPrompt(task: TaskRow) {
         },
         {
           role: 'user',
-          content: buildPromptAnalysisMessage(task, personalAsset, styleAsset),
+          content: buildPromptAnalysisMessage(task, personalAssets, styleAssets),
         },
       ],
     }),
@@ -1641,41 +1828,40 @@ async function generateEnhancedOpenAiPrompt(task: TaskRow) {
   return prompt;
 }
 
-function buildPromptAnalysisMessage(task: TaskRow, personalAsset: AssetRow, styleAsset: AssetRow | null) {
+function buildPromptAnalysisMessage(task: TaskRow, personalAssets: AssetRow[], styleAssets: AssetRow[]) {
   const styleTags = parseStoredStyleTags(task.style_tags_json);
   const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
     {
       type: 'text',
       text: [
         'Project preset: create a single premium AI avatar portrait for a real person with a refined, elegant, warm, luminous, gallery-like result suitable for a premium profile avatar.',
-        'The first uploaded image is the personal identity reference. Preserve the real person\'s recognizable identity through facial structure, face shape, eyes, nose, mouth, hairstyle, and signature features. Transfer that identity into the target style as faithfully as possible. Do not invent a different person or change key personal traits. Do not preserve the first image\'s photographic realism, camera look, or literal photo texture unless the requested style is explicitly photographic.',
-        styleAsset
-          ? 'The second uploaded image is style-only reference and has style priority. Use its medium, art style, visual language, rendering approach, palette, composition, texture, linework, and atmosphere as the primary target style. If the first image is a real selfie/photo and the second image is anime, 2D, illustration, watercolor, or any other non-photographic medium, transform the first person into that medium instead of preserving photo realism. Never copy identity, facial features, or character design from the second image.'
-          : 'No second style-reference image is provided. Use only the written direction for style while preserving the first image identity.',
+        'The uploaded personal-reference images show the same person. Preserve the real person\'s recognizable identity through facial structure, face shape, eyes, nose, mouth, hairstyle, and signature features. Transfer that identity into the target style as faithfully as possible. Do not invent a different person or change key personal traits. Do not preserve the personal images\' photographic realism, camera look, or literal photo texture unless the requested style is explicitly photographic.',
+        styleAssets.length > 0
+          ? 'The uploaded style-reference images are style-only references and have style priority. Use their medium, art style, visual language, rendering approach, palette, composition, texture, linework, and atmosphere as the primary target style. If personal references are real selfies/photos and style references are anime, 2D, illustration, watercolor, or any other non-photographic medium, transform the person into that medium instead of preserving photo realism. Never copy identity, facial features, or character design from style references.'
+          : 'No style-reference image is provided. Use only the written direction for style while preserving the personal-reference identity.',
         `User prompt: ${task.prompt.trim() || 'None provided.'}`,
         `Style tags: ${styleTags.length > 0 ? styleTags.join(' | ') : 'None.'}`,
+        `Personal reference image count: ${personalAssets.length}`,
+        `Style reference image count: ${styleAssets.length}`,
         `Requested model: ${task.model || defaultImageModel}`,
         `Requested quality: ${task.quality || defaultImageQuality}`,
         `Requested output size: ${normalizeOpenAiSize(task.size)}`,
         'Return only the final prompt to send to the image edits endpoint.',
       ].join('\n\n'),
     },
-    {
+    ...personalAssets.map((asset) => ({
       type: 'image_url',
       image_url: {
-        url: buildAssetDataUrl(personalAsset),
+        url: buildAssetDataUrl(asset),
       },
-    },
+    })),
+    ...styleAssets.map((asset) => ({
+      type: 'image_url',
+      image_url: {
+        url: buildAssetDataUrl(asset),
+      },
+    })),
   ];
-
-  if (styleAsset) {
-    content.push({
-      type: 'image_url',
-      image_url: {
-        url: buildAssetDataUrl(styleAsset),
-      },
-    });
-  }
 
   return content;
 }
@@ -1855,9 +2041,14 @@ function mapTask(task: TaskRow, withResult = false) {
     id: task.id,
     status: task.status,
     prompt: task.prompt,
-    styleTags: JSON.parse(task.style_tags_json) as string[],
+    promptSummary: getTaskSummary(task),
+    styleTags: parseStoredStyleTags(task.style_tags_json),
     personalReferenceAssetId: task.personal_reference_asset_id,
     styleReferenceAssetId: task.style_reference_asset_id,
+    personalReferenceAssetIds: getTaskReferenceAssetIds(task, 'personal'),
+    styleReferenceAssetIds: getTaskReferenceAssetIds(task, 'style'),
+    personalReferenceAssets: getTaskReferenceAssets(task, 'personal'),
+    styleReferenceAssets: getTaskReferenceAssets(task, 'style'),
     generationParams: {
       model: task.model,
       quality: task.quality,
@@ -1901,14 +2092,15 @@ function mapResult(result: ResultRow) {
 function mapGalleryItem(itemId: string) {
   const row = db
     .prepare(
-      `SELECT g.*, r.task_id, image_asset.public_url as image_url, thumb_asset.public_url as thumbnail_url
+      `SELECT g.*, r.task_id, image_asset.public_url as image_url, image_asset.width as image_width, image_asset.height as image_height,
+              thumb_asset.public_url as thumbnail_url
        FROM gallery_items g
        JOIN generation_results r ON r.id = g.generation_result_id
        JOIN file_assets image_asset ON image_asset.id = r.image_asset_id
        LEFT JOIN file_assets thumb_asset ON thumb_asset.id = r.thumbnail_asset_id
        WHERE g.id = ?`
     )
-    .get(itemId) as (GalleryRow & { task_id: string; image_url: string; thumbnail_url: string | null }) | undefined;
+    .get(itemId) as (GalleryRow & { task_id: string; image_url: string; image_width: number | null; image_height: number | null; thumbnail_url: string | null }) | undefined;
 
   if (!row) {
     return null;
@@ -1920,9 +2112,52 @@ function mapGalleryItem(itemId: string) {
     taskId: row.task_id,
     imageUrl: row.image_url,
     thumbnailUrl: row.thumbnail_url,
+    width: row.image_width,
+    height: row.image_height,
     isFavorited: Boolean(row.is_favorited),
     savedAt: row.saved_at,
   };
+}
+
+function getTaskSummary(task: TaskRow) {
+  return task.summary || buildFallbackTaskSummary({
+    prompt: task.prompt,
+    styleTags: parseStoredStyleTags(task.style_tags_json),
+    personalReferenceCount: getTaskReferenceAssetIds(task, 'personal').length,
+    styleReferenceCount: getTaskReferenceAssetIds(task, 'style').length,
+    size: task.size,
+  });
+}
+
+function getTaskReferenceAssetIds(task: TaskRow, type: 'personal' | 'style') {
+  const jsonValue = type === 'personal' ? task.personal_reference_asset_ids_json : task.style_reference_asset_ids_json;
+  const fallback = type === 'personal' ? task.personal_reference_asset_id : task.style_reference_asset_id;
+  return parseStoredAssetIds(jsonValue, fallback);
+}
+
+function getTaskReferenceAssets(task: TaskRow, type: 'personal' | 'style') {
+  return getTaskReferenceAssetIds(task, type)
+    .map((assetId) => getAsset(assetId))
+    .filter((asset): asset is AssetRow => Boolean(asset))
+    .map(mapAsset);
+}
+
+function parseStoredAssetIds(assetIdsJson: string | null, fallback: string | null) {
+  const fallbackIds = fallback ? [fallback] : [];
+  if (!assetIdsJson) {
+    return fallbackIds;
+  }
+
+  try {
+    const parsed = JSON.parse(assetIdsJson) as unknown;
+    if (!Array.isArray(parsed)) {
+      return fallbackIds;
+    }
+    const ids = parsed.filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+    return ids.length > 0 ? ids : fallbackIds;
+  } catch {
+    return fallbackIds;
+  }
 }
 
 function mapSessionSummary(sessionId: string, sessionData: session.SessionData) {

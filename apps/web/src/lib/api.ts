@@ -60,8 +60,8 @@ export const api = {
   createTask: (body: {
     prompt: string;
     styleTags: string[];
-    personalReferenceAssetId: string;
-    styleReferenceAssetId: string | null;
+    personalReferenceAssetIds: string[];
+    styleReferenceAssetIds: string[];
     quantity: number;
     generationParams: {
       model: string;
@@ -84,5 +84,7 @@ export const api = {
     request<{ item: GalleryItem }>('/api/gallery-items', { method: 'POST', body: JSON.stringify({ generationResultId }) }),
   updateGallery: (itemId: string, isFavorited: boolean) =>
     request<{ item: GalleryItem }>(`/api/gallery-items/${itemId}`, { method: 'PATCH', body: JSON.stringify({ isFavorited }) }),
+  setAvatarFromGallery: (galleryItemId: string) =>
+    request<{ user: User }>('/api/users/me/avatar', { method: 'POST', body: JSON.stringify({ galleryItemId }) }),
   deleteGallery: (itemId: string) => request<{ success: true }>(`/api/gallery-items/${itemId}`, { method: 'DELETE' }),
 };

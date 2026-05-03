@@ -6,17 +6,28 @@ type QueueCardProps = {
   onRetry: (taskId: string) => void;
 };
 
+type HistoryCardProps = {
+  item: HistoryItem;
+  onRegenerate: (item: HistoryItem) => void;
+  onPreview: (item: HistoryItem) => void;
+};
+
 export function QueueCard({ item, onOpen, onRetry }: QueueCardProps) {
+  const showProgress = item.status === 'queued' || item.status === 'processing';
+
   return (
     <article className="list-card">
       <div className="row-between">
-        <strong>{statusLabel(item.status)}</strong>
+        <strong className={`status-pill ${item.status}`}>{statusLabel(item.status)}</strong>
         <span>{new Date(item.createdAt).toLocaleString()}</span>
       </div>
-      <p>{item.progress.step ?? '处理中'}</p>
-      <div className="progress-track">
-        <div className="progress-fill" style={{ width: `${item.progress.percent}%` }} />
-      </div>
+      <p className="card-summary">{item.summary}</p>
+      <small>{item.progress.step ?? (item.status === 'completed' ? '生成完成' : item.errorMessage ?? '任务已结束')}</small>
+      {showProgress ? (
+        <div className="progress-track">
+          <div className="progress-fill" style={{ width: `${item.progress.percent}%` }} />
+        </div>
+      ) : null}
       <div className="card-actions">
         <button type="button" className="secondary-button" onClick={() => onOpen(item.id, item.status)}>
           {item.status === 'completed' ? '查看结果' : '查看进度'}
@@ -31,55 +42,55 @@ export function QueueCard({ item, onOpen, onRetry }: QueueCardProps) {
   );
 }
 
-export function HistoryCard({ item, onRetry }: { item: HistoryItem; onRetry: (taskId: string) => void }) {
+export function HistoryCard({ item, onRegenerate, onPreview }: HistoryCardProps) {
   return (
-    <article className="list-card">
+    <article className="list-card history-card">
       <div className="row-between">
-        <strong>{statusLabel(item.status)}</strong>
+        <strong className={`status-pill ${item.status}`}>{statusLabel(item.status)}</strong>
         <span>{new Date(item.createdAt).toLocaleString()}</span>
       </div>
-      <p>{item.promptSummary}</p>
-      <small>
-        {item.referenceTypes.join(' / ')} · {item.generationParams.model} · {item.generationParams.quality} · {item.generationParams.size}
-      </small>
-      <button type="button" className="secondary-button" onClick={() => onRetry(item.id)}>
-        再次生成
+      <div className="history-card-body">
+        {item.resultImageUrl ? (
+          <button type="button" className="history-thumb-button" onClick={() => onPreview(item)} aria-label="预览历史结果">
+            <img src={item.resultImageUrl} alt="历史生成结果" />
+          </button>
+        ) : null}
+        <div>
+          <p className="card-summary">{item.promptSummary}</p>
+          <small>
+            {referenceLabel(item)} · {item.generationParams.model} · {item.generationParams.quality} · {item.generationParams.size}
+          </small>
+        </div>
+      </div>
+      <div className="card-actions single-row">
+        <button type="button" className="secondary-button" onClick={() => onRegenerate(item)}>
+          再次生成
+        </button>
+      </div>
+    </article>
+  );
+}
+
+export function GalleryCard({ item, onOpen }: { item: GalleryItem; onOpen: (item: GalleryItem) => void }) {
+  return (
+    <article className="gallery-card">
+      <button type="button" className="gallery-image-button" onClick={() => onOpen(item)} aria-label="查看作品">
+        <img
+          src={item.thumbnailUrl ?? item.imageUrl}
+          alt="已保存头像作品"
+          className="gallery-image"
+          style={item.width && item.height ? { aspectRatio: `${item.width} / ${item.height}` } : undefined}
+        />
+        {item.isFavorited ? <span className="favorite-flower" aria-label="已收藏">✿</span> : null}
       </button>
     </article>
   );
 }
 
-export function GalleryCard({
-  item,
-  onFavorite,
-  onDelete,
-}: {
-  item: GalleryItem;
-  onFavorite: (itemId: string, next: boolean) => void;
-  onDelete: (itemId: string) => void;
-}) {
-  return (
-    <article className="gallery-card glass-card">
-      <a href={`/generate/result/${item.taskId}`} aria-label="查看作品详情">
-        <img src={item.thumbnailUrl ?? item.imageUrl} alt="已保存头像作品" className="gallery-image" />
-      </a>
-      <div className="gallery-actions">
-        <a className="chip" href={`/generate/result/${item.taskId}`}>
-          查看详情
-        </a>
-        <button type="button" className="chip" onClick={() => onFavorite(item.id, !item.isFavorited)}>
-          {item.isFavorited ? '已收藏' : '收藏'}
-        </button>
-        <a className="chip" href={`/api/gallery-items/${item.id}/download`}>
-          下载
-        </a>
-        <button type="button" className="chip" onClick={() => onDelete(item.id)}>
-          删除
-        </button>
-      </div>
-      <small>{new Date(item.savedAt).toLocaleString()}</small>
-    </article>
-  );
+function referenceLabel(item: HistoryItem) {
+  const personalCount = item.personalReferenceAssets.length;
+  const styleCount = item.styleReferenceAssets.length;
+  return styleCount > 0 ? `个人参考 ${personalCount} 张 / 风格参考 ${styleCount} 张` : `个人参考 ${personalCount} 张`;
 }
 
 function statusLabel(status: QueueItem['status']) {

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { ImageLightbox } from '../components/ImageLightbox';
+import { PageSection } from '../components/PageSection';
 import { api } from '../lib/api';
 import type { GalleryItem, GenerationResult, GenerationTask } from '../lib/types';
-import { PageSection } from '../components/PageSection';
 
 export function ResultPage() {
   const { taskId = '' } = useParams();
@@ -11,6 +12,7 @@ export function ResultPage() {
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [savedItem, setSavedItem] = useState<GalleryItem | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -32,8 +34,17 @@ export function ResultPage() {
 
   return (
     <div className="stack-page">
-      <PageSection title="生成结果" subtitle="结果已准备完成，你可以保存到图库、下载原图或继续生成新的版本。">
-        {result?.imageUrl ? <img className="result-image" src={result.imageUrl} alt="生成头像结果" /> : null}
+      <PageSection subtitle="结果已准备完成，你可以保存到图库、下载原图或继续生成新的版本。">
+        {result?.imageUrl ? (
+          <button type="button" className="result-image-button" onClick={() => setPreviewOpen(true)} aria-label="全屏查看生成结果">
+            <img
+              className="result-image"
+              src={result.imageUrl}
+              alt="生成头像结果"
+              style={result.width && result.height ? { aspectRatio: `${result.width} / ${result.height}` } : undefined}
+            />
+          </button>
+        ) : null}
         {error ? <div className="error-text">{error}</div> : null}
         <div className="action-grid">
           <button
@@ -62,9 +73,20 @@ export function ResultPage() {
           <button
             type="button"
             className="secondary-button"
-            onClick={async () => {
-              const response = await api.retryTask(taskId);
-              navigate(`/generate/loading/${response.task.id}`);
+            onClick={() => {
+              if (!task) {
+                return;
+              }
+              navigate('/', {
+                state: {
+                  prompt: task.prompt,
+                  styleTags: task.styleTags,
+                  personalReferenceAssets: task.personalReferenceAssets,
+                  styleReferenceAssets: task.styleReferenceAssets,
+                  generationParams: task.generationParams,
+                  quantity: 1,
+                },
+              });
             }}
           >
             重新生成
@@ -86,6 +108,13 @@ export function ResultPage() {
             <dd>{task?.styleTags.join(' / ') || '无'}</dd>
           </div>
           <div>
+            <dt>参考图</dt>
+            <dd>
+              个人 {task?.personalReferenceAssets.length ?? 0} 张
+              {task?.styleReferenceAssets.length ? ` / 风格 ${task.styleReferenceAssets.length} 张` : ''}
+            </dd>
+          </div>
+          <div>
             <dt>模型</dt>
             <dd>{task?.generationParams.model}</dd>
           </div>
@@ -99,6 +128,14 @@ export function ResultPage() {
           </div>
         </dl>
       </PageSection>
+      <ImageLightbox
+        image={
+          result?.imageUrl && previewOpen
+            ? { src: result.imageUrl, alt: '生成头像结果', width: result.width, height: result.height, meta: result.createdAt ? new Date(result.createdAt).toLocaleString() : undefined }
+            : null
+        }
+        onClose={() => setPreviewOpen(false)}
+      />
     </div>
   );
 }

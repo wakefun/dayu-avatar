@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { HistoryCard } from '../components/Cards';
+import { ImageLightbox } from '../components/ImageLightbox';
 import { PageSection } from '../components/PageSection';
 import { api } from '../lib/api';
 import type { HistoryItem } from '../lib/types';
@@ -8,6 +9,7 @@ import type { HistoryItem } from '../lib/types';
 export function HistoryPage() {
   const navigate = useNavigate();
   const [items, setItems] = useState<HistoryItem[]>([]);
+  const [previewItem, setPreviewItem] = useState<HistoryItem | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -24,14 +26,55 @@ export function HistoryPage() {
             <HistoryCard
               key={item.id}
               item={item}
-              onRetry={async (taskId) => {
-                const response = await api.retryTask(taskId);
-                navigate(`/generate/loading/${response.task.id}`);
+              onPreview={setPreviewItem}
+              onRegenerate={(historyItem) => {
+                navigate('/', {
+                  state: {
+                    prompt: historyItem.prompt,
+                    styleTags: historyItem.styleTags,
+                    personalReferenceAssets: historyItem.personalReferenceAssets,
+                    styleReferenceAssets: historyItem.styleReferenceAssets,
+                    generationParams: historyItem.generationParams,
+                    quantity: 1,
+                  },
+                });
               }}
             />
           ))}
         </div>
       </PageSection>
+      <ImageLightbox
+        image={
+          previewItem?.resultImageUrl
+            ? {
+                src: previewItem.resultImageUrl,
+                alt: previewItem.promptSummary,
+                meta: new Date(previewItem.createdAt).toLocaleString(),
+              }
+            : null
+        }
+        actions={
+          previewItem
+            ? [
+                {
+                  label: '再次生成',
+                  onClick: () =>
+                    navigate('/', {
+                      state: {
+                        prompt: previewItem.prompt,
+                        styleTags: previewItem.styleTags,
+                        personalReferenceAssets: previewItem.personalReferenceAssets,
+                        styleReferenceAssets: previewItem.styleReferenceAssets,
+                        generationParams: previewItem.generationParams,
+                        quantity: 1,
+                      },
+                    }),
+                },
+              ]
+            : []
+        }
+        onClose={() => setPreviewItem(null)}
+      />
     </div>
   );
 }

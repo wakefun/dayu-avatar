@@ -1,13 +1,15 @@
 import type { ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import type { User } from '../lib/types';
 
 type ShellProps = {
   title: string;
   user: User;
   drawerOpen: boolean;
+  installAvailable: boolean;
   onOpenDrawer: () => void;
   onCloseDrawer: () => void;
+  onInstallApp: () => void;
   children: ReactNode;
 };
 
@@ -19,7 +21,9 @@ const navItems = [
   { to: '/settings', label: '账户设置' },
 ];
 
-export function AppShell({ title, user, drawerOpen, onOpenDrawer, onCloseDrawer, children }: ShellProps) {
+export function AppShell({ title, user, drawerOpen, installAvailable, onOpenDrawer, onCloseDrawer, onInstallApp, children }: ShellProps) {
+  const navigate = useNavigate();
+
   return (
     <div className="phone-frame">
       <header className="topbar glass-card">
@@ -28,17 +32,27 @@ export function AppShell({ title, user, drawerOpen, onOpenDrawer, onCloseDrawer,
           <span />
           <span />
         </button>
-        <div>
+        <div className="topbar-title">
           <div className="eyebrow">Dayu Avatar</div>
           <h1>{title}</h1>
         </div>
-        <div className="mini-user">{user.displayName.slice(0, 1)}</div>
+        <button
+          type="button"
+          className="mini-user user-button"
+          onClick={() => navigate('/settings')}
+          aria-label="打开账户设置"
+          style={user.avatarUrl ? { backgroundImage: `url(${user.avatarUrl})` } : undefined}
+        >
+          {user.avatarUrl ? null : user.displayName.slice(0, 1)}
+        </button>
       </header>
 
       <div className={`drawer-backdrop ${drawerOpen ? 'open' : ''}`} onClick={onCloseDrawer} />
       <aside className={`drawer glass-card ${drawerOpen ? 'open' : ''}`} aria-hidden={!drawerOpen}>
         <div className="drawer-user">
-          <div className="avatar-mark">{user.displayName.slice(0, 1)}</div>
+          <div className="avatar-mark" style={user.avatarUrl ? { backgroundImage: `url(${user.avatarUrl})` } : undefined}>
+            {user.avatarUrl ? null : user.displayName.slice(0, 1)}
+          </div>
           <div>
             <strong>{user.displayName}</strong>
             <p>{user.email ?? '已连接大宇统一登录'}</p>
@@ -56,6 +70,9 @@ export function AppShell({ title, user, drawerOpen, onOpenDrawer, onCloseDrawer,
               {item.label}
             </NavLink>
           ))}
+          <button type="button" className="nav-link install-link" onClick={onInstallApp}>
+            {installAvailable ? '添加到桌面' : '已支持添加到桌面'}
+          </button>
         </nav>
       </aside>
 
