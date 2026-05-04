@@ -38,3 +38,36 @@ Migrated apps/web from global business CSS to Tailwind-based shared UI primitive
 ### Next Steps
 
 - None - task complete
+
+
+## Session 2: Adopt Trellis shared asset tracking
+
+**Date**: 2026-05-05
+**Task**: Adopt Trellis shared asset tracking
+**Branch**: `main`
+
+### Summary
+
+Updated the repo to stop ignoring .trellis wholesale, keep only Trellis local/runtime state ignored, and start tracking shared workflow, spec, task, script, and workspace assets in git.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4c0a2f1` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
