@@ -1,4 +1,17 @@
-.trellis
+# Track shared Trellis project assets; ignore only local/runtime state
+.trellis/.developer
+.trellis/.current-task
+.trellis/.runtime/
+.trellis/.ralph-state.json
+.trellis/.agents/
+.trellis/.agent-log
+.trellis/.session-id
+.trellis/.plan-log
+.trellis/.backup-*
+.trellis/*.tmp
+.trellis/*.new
+.trellis/**/__pycache__/
+.trellis/**/*.pyc
 .claude
 .opencode
 node_modules

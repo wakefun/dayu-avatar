@@ -1,0 +1,17 @@
+{"file":".trellis/spec/backend/index.md","reason":"Check backend implementation against available project guideline entry point."}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Verify backend files are organized coherently for the new app."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Verify SQLite schema and persistence choices align with project guidance."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Verify API errors are consistent and safe."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Verify backend quality expectations are met."}
+{"file":".trellis/spec/frontend/index.md","reason":"Check frontend implementation against available project guideline entry point."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Verify frontend files are organized coherently for the new app."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Verify React component structure and reuse."}
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"Verify custom hooks and fetch logic are appropriate."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Verify auth/tasks/gallery UI state remains coherent."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Verify frontend/backend contract typing and null handling."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Verify frontend quality expectations are met."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check full-stack data flow across API, service, DB, and UI."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Check for avoidable duplication in new route/client/component patterns."}
+{"file":".trellis/tasks/05-02-dayu-avatar-mvp/research/fullstack-stack.md","reason":"Check implementation follows the chosen MVP stack and service boundaries."}
+{"file":".trellis/tasks/05-02-dayu-avatar-mvp/research/api-data-contracts.md","reason":"Check API contracts, SQLite tables, and data boundaries against research."}
+{"file":".trellis/tasks/05-02-dayu-avatar-mvp/research/stitch-ui-implementation.md","reason":"Check UI routes/components/navigation against Stitch translation research."}

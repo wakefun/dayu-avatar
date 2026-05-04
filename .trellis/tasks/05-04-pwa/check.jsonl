@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Check frontend UI and type contract changes."}
+{"file":".trellis/spec/backend/index.md","reason":"Check backend API and schema changes."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Verify data survives database/API/frontend round trips."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Verify shared image behavior avoids divergent duplicate implementations."}

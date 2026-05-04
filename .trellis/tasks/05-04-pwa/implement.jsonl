@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend UI components, pages, and type contracts are part of this task."}
+{"file":".trellis/spec/backend/index.md","reason":"Backend API, storage schema, and task data contracts are part of this task."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Task spans database, API, frontend types, and UI."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Task adds shared image display/lightbox/upload behavior across multiple pages."}

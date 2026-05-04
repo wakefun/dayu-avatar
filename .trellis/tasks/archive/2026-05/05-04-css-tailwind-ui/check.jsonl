@@ -1,0 +1,3 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Verify that the Tailwind migration preserves topbar + drawer navigation, upload/reference layouts, lightbox behavior, gallery masonry, and result image display contracts."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Use the documented frontend package commands and confirm the web app still builds and typechecks within apps/web."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Check that repeated style patterns were consolidated through existing component boundaries instead of duplicated during migration."}

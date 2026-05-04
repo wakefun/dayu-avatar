@@ -1,0 +1,19 @@
+{"file":".trellis/spec/backend/index.md","reason":"Backend guideline entry point for API, database, storage, and service implementation."}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Backend app is scaffolded from scratch and needs package/module layout guidance."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"SQLite schema, migrations, and persistence are core MVP requirements."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"API error envelope and route failure behavior span frontend/backend contracts."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Backend quality checks and maintainability guidance for new Node service."}
+{"file":".trellis/spec/backend/logging-guidelines.md","reason":"Generation/upload/auth routes should follow any logging guidance available."}
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend guideline entry point for React mobile SPA implementation."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Frontend app is scaffolded from scratch and needs file organization guidance."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"MVP includes many reusable mobile UI components and pages."}
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"Frontend will use hooks for API data fetching and UI state."}
+{"file":".trellis/spec/frontend/state-management.md","reason":"Auth, draft generation, tasks, results, gallery, and shell state must stay coherent."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Frontend/backend API contracts should stay typed and consistent."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Frontend quality checks for React/Vite implementation."}
+{"file":".trellis/spec/guides/index.md","reason":"Cross-cutting thinking guide entry point for full-stack MVP."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Feature spans frontend, API, services, database, and local file storage."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"New project should avoid duplicating route/client/component patterns."}
+{"file":".trellis/tasks/05-02-dayu-avatar-mvp/research/fullstack-stack.md","reason":"Documents chosen MVP stack and scripts/dependency recommendations."}
+{"file":".trellis/tasks/05-02-dayu-avatar-mvp/research/api-data-contracts.md","reason":"Defines REST contracts, SQLite tables, and cross-layer data model."}
+{"file":".trellis/tasks/05-02-dayu-avatar-mvp/research/stitch-ui-implementation.md","reason":"Maps Stitch screens and mobile design direction to React routes/components."}

@@ -1,0 +1,1 @@
+{"file":".trellis/tasks/05-05-trellis-gitignore/research/trellis-gitignore-policy.md","reason":"Official/upstream guidance for which `.trellis` paths should be tracked versus ignored, including the explicit status of workspace journals and local runtime files."}

@@ -1,0 +1,1 @@
+{"file":".trellis/tasks/05-05-trellis-gitignore/research/trellis-gitignore-policy.md","reason":"Verification baseline for checking that the final root `.gitignore` matches upstream Trellis tracking policy and still ignores only local/runtime state."}
