@@ -4,6 +4,7 @@ import { QueueCard } from '../components/Cards';
 import { PageSection } from '../components/PageSection';
 import { api } from '../lib/api';
 import type { QueueItem } from '../lib/types';
+import { pageStackClass } from '../components/ui';
 
 export function QueuePage() {
   const navigate = useNavigate();
@@ -23,9 +24,9 @@ export function QueuePage() {
   }, []);
 
   return (
-    <div className="stack-page">
+    <div className={pageStackClass}>
       <PageSection title="任务队列" subtitle="查看排队中、生成中、已完成、已失败与已取消的任务。">
-        <div className="list-stack">
+        <div className="grid gap-3.5">
           {items.map((item) => (
             <QueueCard
               key={item.id}

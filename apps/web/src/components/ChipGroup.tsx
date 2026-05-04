@@ -1,3 +1,5 @@
+import { chipButtonClass } from './ui';
+
 type ChipGroupProps = {
   tags: string[];
   onSelect: (tag: string) => void;
@@ -5,9 +7,9 @@ type ChipGroupProps = {
 
 export function ChipGroup({ tags, onSelect }: ChipGroupProps) {
   return (
-    <div className="chip-group">
+    <div className="flex flex-wrap gap-2.5">
       {tags.map((tag) => (
-        <button key={tag} type="button" className="chip" onClick={() => onSelect(tag)}>
+        <button key={tag} type="button" className={chipButtonClass()} onClick={() => onSelect(tag)}>
           {tag}
         </button>
       ))}

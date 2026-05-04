@@ -81,7 +81,11 @@ export function App() {
   }, [location.pathname]);
 
   if (loading) {
-    return <div className="boot-screen">正在准备画廊空间...</div>;
+    return (
+      <div className="grid min-h-screen place-items-center px-6 text-sm text-[#6b5f59]">
+        正在准备画廊空间...
+      </div>
+    );
   }
 
   if (!user) {

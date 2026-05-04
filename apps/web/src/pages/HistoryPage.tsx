@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { HistoryCard } from '../components/Cards';
 import { ImageLightbox } from '../components/ImageLightbox';
 import { PageSection } from '../components/PageSection';
+import { pageStackClass } from '../components/ui';
 import { api } from '../lib/api';
 import type { HistoryItem } from '../lib/types';
 
@@ -19,9 +20,9 @@ export function HistoryPage() {
   }, []);
 
   return (
-    <div className="stack-page">
+    <div className={pageStackClass}>
       <PageSection title="历史记录" subtitle="保存所有生成行为，包括成功、失败、取消与重复生成。">
-        <div className="list-stack">
+        <div className="grid gap-3.5">
           {items.map((item) => (
             <HistoryCard
               key={item.id}

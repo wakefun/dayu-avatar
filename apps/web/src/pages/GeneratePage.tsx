@@ -6,6 +6,7 @@ import { PageSection } from '../components/PageSection';
 import { UploadCard } from '../components/UploadCard';
 import { api } from '../lib/api';
 import type { Asset } from '../lib/types';
+import { cx, fieldLabelClass, helperTextClass, inputClass, pageStackClass, primaryButtonClass } from '../components/ui';
 
 const styleSuggestions = [
   {
@@ -147,7 +148,7 @@ export function GeneratePage() {
   };
 
   return (
-    <div className="stack-page">
+    <div className={pageStackClass}>
       <PageSection title="个人形象参考图" subtitle="上传清晰正脸或半身照片，帮助 AI 保留你的个人特征。">
         <UploadCard
           title="个人形象参考图"
@@ -175,9 +176,10 @@ export function GeneratePage() {
       </PageSection>
 
       <PageSection title="描述你想要的头像风格" subtitle="每次点击灵感标签，都会把一段更完整的风格描述补充到提示词中。">
-        <label className="field">
+        <label className={fieldLabelClass}>
           <span>头像风格描述</span>
           <textarea
+            className={`${inputClass} min-h-[150px] resize-y`}
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
             rows={6}
@@ -185,20 +187,20 @@ export function GeneratePage() {
           />
         </label>
         <ChipGroup tags={styleSuggestions.map((item) => item.tag)} onSelect={handleInsertSuggestion} />
-        <p className="prompt-helper">你可以自由补充人物气质、光线、色调、构图或想要突出的情绪表达。</p>
+        <p className={helperTextClass}>你可以自由补充人物气质、光线、色调、构图或想要突出的情绪表达。</p>
       </PageSection>
 
       <PageSection title="生成设置" subtitle="选择更接近 Stitch 的生成偏好，数量大于 1 时会并发创建多条任务，而不是在一次请求中批量返回多图。">
-        <div className="settings-stack">
+        <div className="grid gap-4">
           <SegmentedControl label="图片比例" options={ratioOptions} value={ratio} onChange={setRatio} />
           <SegmentedControl label="图片分辨率" options={resolutionOptions} value={resolution} onChange={setResolution} />
           <SegmentedControl label="生成数量" options={quantityOptions} value={quantity} onChange={setQuantity} />
-          <p className="section-helper">默认生成 1 张。高分辨率会按比例换算成合法尺寸，并规范到 16 的倍数；当数量大于 1 时，你会进入任务队列统一查看每张结果。</p>
+          <p className={helperTextClass}>默认生成 1 张。高分辨率会按比例换算成合法尺寸，并规范到 16 的倍数；当数量大于 1 时，你会进入任务队列统一查看每张结果。</p>
         </div>
-        {error ? <div className="error-text">{error}</div> : null}
+        {error ? <div className="mt-3 text-sm text-[#b36f67]">{error}</div> : null}
         <button
           type="button"
-          className="primary-button primary-cta"
+          className={cx(primaryButtonClass, 'mt-4')}
           disabled={personalAssets.length === 0 || submitting}
           onClick={async () => {
             if (personalAssets.length === 0) {
@@ -236,7 +238,7 @@ export function GeneratePage() {
         >
           {submitting ? '正在创建任务...' : '开始生成'}
         </button>
-        <p className="section-helper">预计 30-60 秒完成，可在任务队列中查看进度。</p>
+        <p className={`mt-3 ${helperTextClass}`}>预计 30-60 秒完成，可在任务队列中查看进度。</p>
       </PageSection>
       <ImageLightbox
         image={previewAsset ? { src: previewAsset.fileUrl, alt: previewAsset.fileName, width: previewAsset.width, height: previewAsset.height } : null}
@@ -248,14 +250,19 @@ export function GeneratePage() {
 
 function SegmentedControl<T extends string>({ label, options, value, onChange }: SegmentedControlProps<T>) {
   return (
-    <div className="segmented-field">
-      <span className="segmented-label">{label}</span>
-      <div className="segmented-control" role="group" aria-label={label}>
+    <div className="grid gap-2.5">
+      <span className="text-sm text-[#6b5f59]">{label}</span>
+      <div className="flex flex-wrap gap-2.5" role="group" aria-label={label}>
         {options.map((option) => (
           <button
             key={option.value}
             type="button"
-            className={`segmented-option ${option.value === value ? 'active' : ''}`}
+            className={cx(
+              'min-h-11 rounded-full border px-[18px] text-sm transition',
+              option.value === value
+                ? 'border-[#cfa983]/44 bg-gradient-to-br from-[#fff8f4] to-[#e9effc] text-[#2f2724]'
+                : 'border-[#7a6a60]/14 bg-white/74 text-[#6b5f59] hover:bg-white'
+            )}
             onClick={() => onChange(option.value)}
           >
             {option.label}

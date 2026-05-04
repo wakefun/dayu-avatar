@@ -39,6 +39,19 @@
 <ChipGroup tags={styleTags} onSelect={insertPromptSnippet} />
 ```
 
+- Shared styling primitives:
+
+```ts
+import {
+  cx,
+  glassPanelClass,
+  pageStackClass,
+  softCardClass,
+  primaryButtonClass,
+  secondaryButtonClass,
+} from './ui';
+```
+
 - Stitch homepage setting controls:
   - `图片比例`: `1:1`, `3:4`, `9:16`
   - `图片分辨率`: `1K`, `2K`, `4K`
@@ -47,6 +60,11 @@
 ### 3. Contracts
 
 - Global navigation uses a top app bar and side drawer.
+- Tailwind CSS is the primary styling mechanism for `apps/web`.
+- `src/styles.css` should only hold Tailwind import plus minimal `@theme` / `@layer base` globals; do not rebuild the old business-class stylesheet there.
+- Shared visual recipes belong in `src/components/ui.ts` as class constants/helpers and are consumed by components/pages.
+- Components should compose shared primitives such as `AppShell`, `PageSection`, `UploadCard`, `Cards`, `ImageLightbox`, and `ui.ts` helpers rather than inventing page-local styling systems.
+- Allow inline `style` only for true runtime values such as `backgroundImage`, progress width, and image `aspectRatio`.
 - Do not add a bottom tab bar.
 - Generation/home page no longer uses a separate redundant intro hero card; the primary content starts with the upload and generation sections.
 - Reference upload cards must support 1-3 images in a fixed square container.
@@ -90,7 +108,7 @@
 ### 6. Tests Required
 
 - Browser smoke test should verify login, drawer navigation, generation controls, upload controls, style suggestion insertion, queue/history/gallery/settings pages, and save-to-gallery flow.
-- Lint/typecheck/build must pass after component changes.
+- `pnpm --filter @dayu/web lint`, `pnpm --filter @dayu/web typecheck`, and `pnpm --filter @dayu/web build` must pass after styling changes.
 - For future automated UI tests, assert buttons are reachable by text and do not cause double navigation/action.
 - For style suggestions, assert repeated clicks do not create a persistent selected visual state and do not duplicate the exact same snippet.
 - Add UI assertions for 1/2/3-image reference layouts, remove actions, lightbox open/close, history regenerate prefill navigation, queue completed/failed cards hiding progress bars, result image using native aspect ratio, and gallery masonry cards remaining image-only.
@@ -106,8 +124,28 @@
 #### Correct
 
 ```tsx
+<button type="button" className={secondaryButtonClass}>选择图片</button>
+```
+
+#### Wrong
+
+```tsx
 <div className={`reference-grid count-${Math.max(values.length, 1)}`}>
   {values.length > 0 && canAdd ? <label className="reference-add-overlay">…</label> : null}
+</div>
+```
+
+#### Correct
+
+```tsx
+<div
+  className={cx(
+    'relative grid aspect-square w-full overflow-hidden rounded-[22px]',
+    count === 2 && 'grid-cols-2',
+    count === 3 && 'grid-cols-2 grid-rows-2'
+  )}
+>
+  {values.length > 0 && canAdd ? <label className="absolute inset-x-0 bottom-0">…</label> : null}
 </div>
 ```
 
@@ -151,9 +189,12 @@ navigate('/', {
 
 ## Styling Patterns
 
-- Use global CSS classes in `src/styles.css` for this MVP.
+- Use Tailwind CSS utilities in components/pages; do not introduce new global business classes in `src/styles.css`.
 - Keep phone-width layout and safe mobile spacing as the default.
-- Use CSS variables/design tokens for colors, radii, shadows, and spacing.
+- Use `src/components/ui.ts` for shared class recipes such as glass panels, button variants, page stacks, card shells, field text, and `cx(...)` composition.
+- Keep `src/styles.css` limited to Tailwind import, theme tokens, and base element styling.
+- Use CSS variables or Tailwind theme tokens for shared colors and fonts, not ad-hoc repeated literals across many files.
+- Inline styles are allowed only when the value is runtime-driven and cannot be expressed statically, such as avatar backgrounds, progress widths, and image aspect ratios.
 
 ---
 

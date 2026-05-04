@@ -4,6 +4,7 @@ import { ImageLightbox } from '../components/ImageLightbox';
 import { PageSection } from '../components/PageSection';
 import { api } from '../lib/api';
 import type { GalleryItem, GenerationResult, GenerationTask } from '../lib/types';
+import { pageStackClass, primaryButtonClass, secondaryButtonClass } from '../components/ui';
 
 export function ResultPage() {
   const { taskId = '' } = useParams();
@@ -33,23 +34,28 @@ export function ResultPage() {
   }, [taskId]);
 
   return (
-    <div className="stack-page">
+    <div className={pageStackClass}>
       <PageSection subtitle="结果已准备完成，你可以保存到图库、下载原图或继续生成新的版本。">
         {result?.imageUrl ? (
-          <button type="button" className="result-image-button" onClick={() => setPreviewOpen(true)} aria-label="全屏查看生成结果">
+          <button
+            type="button"
+            className="mb-3.5 block w-full overflow-hidden rounded-[22px] border-0 bg-transparent p-0"
+            onClick={() => setPreviewOpen(true)}
+            aria-label="全屏查看生成结果"
+          >
             <img
-              className="result-image"
+              className="block h-full max-h-[68vh] w-full bg-white/45 object-contain"
               src={result.imageUrl}
               alt="生成头像结果"
               style={result.width && result.height ? { aspectRatio: `${result.width} / ${result.height}` } : undefined}
             />
           </button>
         ) : null}
-        {error ? <div className="error-text">{error}</div> : null}
-        <div className="action-grid">
+        {error ? <div className="text-sm text-[#b36f67]">{error}</div> : null}
+        <div className="grid gap-3.5">
           <button
             type="button"
-            className="primary-button"
+            className={primaryButtonClass}
             disabled={!result || !!savedItem}
             onClick={async () => {
               if (!result) {
@@ -62,17 +68,17 @@ export function ResultPage() {
             {savedItem ? '已保存到图库' : '保存到图库'}
           </button>
           {savedItem ? (
-            <a className="secondary-button inline-link" href={`/api/gallery-items/${savedItem.id}/download`}>
+            <a className={secondaryButtonClass} href={`/api/gallery-items/${savedItem.id}/download`}>
               下载
             </a>
           ) : result?.imageUrl ? (
-            <a className="secondary-button inline-link" href={result.imageUrl} download>
+            <a className={secondaryButtonClass} href={result.imageUrl} download>
               下载
             </a>
           ) : null}
           <button
             type="button"
-            className="secondary-button"
+            className={secondaryButtonClass}
             onClick={() => {
               if (!task) {
                 return;
@@ -91,40 +97,40 @@ export function ResultPage() {
           >
             重新生成
           </button>
-          <button type="button" className="secondary-button" onClick={() => navigate('/gallery')}>
+          <button type="button" className={secondaryButtonClass} onClick={() => navigate('/gallery')}>
             前往图库
           </button>
         </div>
       </PageSection>
 
       <PageSection title="生成参数" subtitle="查看本次头像生成所使用的提示词、风格建议与基础参数。">
-        <dl className="detail-list">
-          <div>
-            <dt>提示词</dt>
-            <dd>{task?.prompt || '未填写提示词'}</dd>
+        <dl className="m-0">
+          <div className="border-b border-[#807269]/10 py-3.5">
+            <dt className="mb-1.5 font-bold text-[#2f2724]">提示词</dt>
+            <dd className="m-0 text-sm leading-6 text-[#6b5f59]">{task?.prompt || '未填写提示词'}</dd>
           </div>
-          <div>
-            <dt>风格建议</dt>
-            <dd>{task?.styleTags.join(' / ') || '无'}</dd>
+          <div className="border-b border-[#807269]/10 py-3.5">
+            <dt className="mb-1.5 font-bold text-[#2f2724]">风格建议</dt>
+            <dd className="m-0 text-sm leading-6 text-[#6b5f59]">{task?.styleTags.join(' / ') || '无'}</dd>
           </div>
-          <div>
-            <dt>参考图</dt>
-            <dd>
+          <div className="border-b border-[#807269]/10 py-3.5">
+            <dt className="mb-1.5 font-bold text-[#2f2724]">参考图</dt>
+            <dd className="m-0 text-sm leading-6 text-[#6b5f59]">
               个人 {task?.personalReferenceAssets.length ?? 0} 张
               {task?.styleReferenceAssets.length ? ` / 风格 ${task.styleReferenceAssets.length} 张` : ''}
             </dd>
           </div>
-          <div>
-            <dt>模型</dt>
-            <dd>{task?.generationParams.model}</dd>
+          <div className="border-b border-[#807269]/10 py-3.5">
+            <dt className="mb-1.5 font-bold text-[#2f2724]">模型</dt>
+            <dd className="m-0 text-sm leading-6 text-[#6b5f59]">{task?.generationParams.model}</dd>
           </div>
-          <div>
-            <dt>质量</dt>
-            <dd>{task?.generationParams.quality}</dd>
+          <div className="border-b border-[#807269]/10 py-3.5">
+            <dt className="mb-1.5 font-bold text-[#2f2724]">质量</dt>
+            <dd className="m-0 text-sm leading-6 text-[#6b5f59]">{task?.generationParams.quality}</dd>
           </div>
-          <div>
-            <dt>尺寸</dt>
-            <dd>{task?.generationParams.size}</dd>
+          <div className="py-3.5">
+            <dt className="mb-1.5 font-bold text-[#2f2724]">尺寸</dt>
+            <dd className="m-0 text-sm leading-6 text-[#6b5f59]">{task?.generationParams.size}</dd>
           </div>
         </dl>
       </PageSection>

@@ -5,6 +5,7 @@ import { ImageLightbox } from '../components/ImageLightbox';
 import { PageSection } from '../components/PageSection';
 import { api } from '../lib/api';
 import type { GalleryItem, User } from '../lib/types';
+import { pageStackClass, secondaryButtonClass, softCardClass } from '../components/ui';
 
 type GalleryPageProps = {
   onUserUpdated: (user: User) => void;
@@ -31,18 +32,18 @@ export function GalleryPage({ onUserUpdated }: GalleryPageProps) {
   };
 
   return (
-    <div className="stack-page">
+    <div className={pageStackClass}>
       <PageSection title="我的图库" subtitle="这里只展示你主动保存的最终头像作品。">
         {items.length === 0 ? (
-          <div className="empty-state">
-            <strong>还没有收藏的头像作品</strong>
-            <p>回到头像生成页，完成第一张作品后即可保存到这里。</p>
-            <button type="button" className="secondary-button" onClick={() => navigate('/')}>
+          <div className={`${softCardClass} grid gap-2.5`}>
+            <strong className="text-[15px] text-[#2f2724]">还没有收藏的头像作品</strong>
+            <p className="m-0 text-sm leading-6 text-[#6b5f59]">回到头像生成页，完成第一张作品后即可保存到这里。</p>
+            <button type="button" className={secondaryButtonClass} onClick={() => navigate('/')}>
               去生成第一个头像
             </button>
           </div>
         ) : (
-          <div className="gallery-masonry">
+          <div className="columns-2 gap-3 [column-gap:12px]">
             {items.map((item) => (
               <GalleryCard key={item.id} item={item} onOpen={setActiveItem} />
             ))}
