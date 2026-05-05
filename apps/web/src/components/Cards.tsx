@@ -15,6 +15,11 @@ type HistoryCardProps = {
 
 export function QueueCard({ item, onOpen, onRetry }: QueueCardProps) {
   const showProgress = item.status === 'queued' || item.status === 'processing';
+  const statusMessage = showProgress
+    ? item.progress.step ?? '排队中'
+    : item.status === 'completed'
+      ? '生成完成'
+      : item.errorMessage ?? '任务已结束';
 
   return (
     <article className={cx(softCardClass, 'grid gap-3')}>
@@ -23,9 +28,7 @@ export function QueueCard({ item, onOpen, onRetry }: QueueCardProps) {
         <span className="text-xs text-[#6b5f59]">{new Date(item.createdAt).toLocaleString()}</span>
       </div>
       <p className="m-0 text-[15px] font-semibold text-[#2f2724]">{item.summary}</p>
-      <small className="text-sm leading-6 text-[#6b5f59]">
-        {item.progress.step ?? (item.status === 'completed' ? '生成完成' : item.errorMessage ?? '任务已结束')}
-      </small>
+      <small className="text-sm leading-6 text-[#6b5f59]">{statusMessage}</small>
       {showProgress ? (
         <div className="h-2.5 w-full overflow-hidden rounded-full bg-[#e8e0db]/80">
           <div
@@ -36,7 +39,7 @@ export function QueueCard({ item, onOpen, onRetry }: QueueCardProps) {
       ) : null}
       <div className="grid gap-2.5">
         <button type="button" className={secondaryButtonClass} onClick={() => onOpen(item.id, item.status)}>
-          {item.status === 'completed' ? '查看结果' : '查看进度'}
+          {item.status === 'completed' ? '查看结果' : showProgress ? '查看进度' : '查看详情'}
         </button>
         {item.status === 'failed' ? (
           <button type="button" className={secondaryButtonClass} onClick={() => onRetry(item.id)}>

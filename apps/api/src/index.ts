@@ -428,6 +428,11 @@ app.get('/api/auth/callback', async (req, res) => {
 });
 
 app.post('/api/auth/mock-login', async (req, res, next) => {
+  if (authMode !== 'mock') {
+    sendError(res, 400, 'VALIDATION_ERROR', '当前环境未启用模拟登录');
+    return;
+  }
+
   try {
     const displayName = typeof req.body?.displayName === 'string' && req.body.displayName.trim() ? req.body.displayName.trim() : '大宇体验用户';
     const userId = await completeMockLogin(req, displayName);
@@ -503,12 +508,13 @@ app.post('/api/uploads', requireAuth, upload.single('file'), (req, res) => {
     return;
   }
 
-  if (!file.mimetype.startsWith('image/')) {
-    sendError(res, 400, 'VALIDATION_ERROR', 'file must be an image');
+  const imageFile = detectImageFile(file.buffer);
+  if (!imageFile) {
+    sendError(res, 400, 'VALIDATION_ERROR', 'file must be a PNG, JPG, or WEBP image');
     return;
   }
 
-  const asset = createUploadedAsset(req.session.userId!, category, file);
+  const asset = createUploadedAsset(req.session.userId!, category, file, imageFile);
   res.status(201).json({ asset: mapAsset(asset) });
 });
 
@@ -1156,9 +1162,14 @@ function upsertOidcUser(claims: OidcIdTokenClaims, providerSubject: string) {
   return userId;
 }
 
-function createUploadedAsset(userId: string, category: 'personal_reference' | 'style_reference', file: Express.Multer.File): AssetRow {
+function createUploadedAsset(
+  userId: string,
+  category: 'personal_reference' | 'style_reference',
+  file: Express.Multer.File,
+  imageFile: { mimeType: string; extension: string }
+): AssetRow {
   const id = createId('asset');
-  const extension = path.extname(file.originalname) || mimeToExtension(file.mimetype);
+  const extension = imageFile.extension;
   const monthFolder = formatMonthPath();
   const fileName = `${id}${extension}`;
   const storagePath = path.join('uploads', category, monthFolder, fileName);
@@ -1175,8 +1186,8 @@ function createUploadedAsset(userId: string, category: 'personal_reference' | 's
     category,
     storagePath,
     toStaticUrl(`/${storagePath.replaceAll(path.sep, '/')}`),
-    file.originalname,
-    file.mimetype || 'application/octet-stream',
+    fileName,
+    imageFile.mimeType,
     null,
     null,
     file.size,

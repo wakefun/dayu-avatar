@@ -2,6 +2,8 @@ import type { ChangeEvent } from 'react';
 import type { Asset } from '../lib/types';
 import { cx } from './ui';
 
+const acceptedImageTypes = 'image/png,image/jpeg,image/webp';
+
 type UploadCardProps = {
   title: string;
   description: string;
@@ -46,7 +48,7 @@ export function UploadCard({ title, description, actionLabel, iconLabel, values,
               <strong className="text-[15px] text-[#2f2724]">{actionLabel}</strong>
               <span className="text-sm text-[#6b5f59]">支持 PNG / JPG / WEBP</span>
             </div>
-            <input className="hidden" type="file" accept="image/*" onChange={(event) => handleFileInput(event, onAdd)} />
+            <input className="hidden" type="file" accept={acceptedImageTypes} onChange={(event) => handleFileInput(event, onAdd)} />
           </label>
         ) : (
           values.map((asset, index) => (
@@ -62,16 +64,14 @@ export function UploadCard({ title, description, actionLabel, iconLabel, values,
               >
                 <img src={asset.fileUrl} alt={asset.fileName} className="block h-full w-full object-cover" />
               </button>
-              {values.length > 1 ? (
-                <button
-                  type="button"
-                  className="absolute top-2 right-2 grid h-[30px] w-[30px] place-items-center rounded-full bg-white/88 text-base font-bold text-[#2f2724] shadow-sm"
-                  onClick={() => onRemove(asset.id)}
-                  aria-label="移除图片"
-                >
-                  ×
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className="absolute top-2 right-2 grid h-[30px] w-[30px] place-items-center rounded-full bg-white/88 text-base font-bold text-[#2f2724] shadow-sm"
+                onClick={() => onRemove(asset.id)}
+                aria-label="移除图片"
+              >
+                ×
+              </button>
             </div>
           ))
         )}
@@ -82,7 +82,7 @@ export function UploadCard({ title, description, actionLabel, iconLabel, values,
             aria-label={actionLabel}
           >
             <span className="grid h-12 w-12 place-items-center rounded-full bg-white/20 text-[26px] font-bold text-white">＋</span>
-            <input className="hidden" type="file" accept="image/*" onChange={(event) => handleFileInput(event, onAdd)} />
+            <input className="hidden" type="file" accept={acceptedImageTypes} onChange={(event) => handleFileInput(event, onAdd)} />
           </label>
         ) : null}
       </div>

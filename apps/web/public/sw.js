@@ -17,9 +17,15 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
-  if (request.method !== 'GET' || new URL(request.url).pathname.startsWith('/api/')) {
+  const url = new URL(request.url);
+  if (request.method !== 'GET' || url.pathname.startsWith('/api/')) {
     return;
   }
 
-  event.respondWith(fetch(request).catch(() => caches.match(request).then((cached) => cached ?? caches.match('/'))));
+  if (request.mode === 'navigate') {
+    event.respondWith(fetch(request).catch(() => caches.match('/')));
+    return;
+  }
+
+  event.respondWith(fetch(request).catch(() => caches.match(request)));
 });

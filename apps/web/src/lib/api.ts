@@ -51,7 +51,8 @@ export const api = {
       body: formData,
       credentials: 'include',
     });
-    const payload = await response.json();
+    const isJson = response.headers.get('content-type')?.includes('application/json');
+    const payload = isJson ? await response.json() : null;
     if (!response.ok) {
       throw new Error(payload?.error?.message ?? '上传失败');
     }

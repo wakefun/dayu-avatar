@@ -1,0 +1,6 @@
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Frontend validation commands and expected workspace contracts for final checks."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"UI behavior, accessibility, Tailwind usage, and browser smoke-test requirements for verification."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Review checklist for avoiding duplicated or inconsistent fixes."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check layer-boundary behavior if source findings touch API/frontend contracts."}
+{"file":".trellis/tasks/05-05-audit-fix-project-issues/research/code-audit.md","reason":"Source audit findings to verify were addressed or intentionally deferred."}
+{"file":".trellis/tasks/05-05-audit-fix-project-issues/research/config-audit.md","reason":"Config/build audit findings to verify were addressed or intentionally deferred."}

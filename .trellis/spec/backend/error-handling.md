@@ -48,14 +48,14 @@ Standard MVP error codes:
 |---|---:|---|
 | No authenticated session | 401 | `UNAUTHORIZED` |
 | Missing required request field | 400 | `VALIDATION_ERROR` |
-| Uploaded file is not an image MIME type | 400 | `VALIDATION_ERROR` |
+| Uploaded file bytes are not PNG, JPG, or WEBP | 400 | `VALIDATION_ERROR` |
 | Resource does not exist or is not owned by current user | 404 | `NOT_FOUND` |
 | Result requested before generation completes | 409 | `INVALID_STATE` |
 | Unexpected route exception | 500 | `INTERNAL_ERROR` |
 
 ### 5. Good/Base/Bad Cases
 
-- Good: validate upload `category`, `file`, and MIME type before writing to disk.
+- Good: validate upload `category`, `file`, and detected PNG/JPG/WEBP bytes before writing to disk.
 - Base: route returns `404 NOT_FOUND` for user-owned resources that are absent.
 - Bad: do not return raw thrown errors or inconsistent shapes such as `{ message }` to the frontend.
 
@@ -121,6 +121,8 @@ OPENAI_REQUEST_TIMEOUT_MS           # optional, defaults to 600000ms; invalid or
 ### 3. Contracts
 
 - `AUTH_MODE` valid values: `mock`, `oidc`; default is `mock`.
+- `POST /api/auth/mock-login` is valid only when `AUTH_MODE=mock`; in OIDC mode it must return a `400 VALIDATION_ERROR` and must not create a session.
+- Upload routes accept only files whose bytes are detected as PNG, JPG, or WEBP; do not trust client-supplied MIME type or original filename extension for storage metadata.
 - `GENERATION_MODE` valid values: `mock`, `openai`; default is `mock`.
 - OIDC login uses Authorization Code + PKCE.
 - Store `state`, `nonce`, and `code_verifier` in the server session before redirecting.
@@ -153,6 +155,9 @@ OPENAI_REQUEST_TIMEOUT_MS           # optional, defaults to 600000ms; invalid or
 | Any style reference asset id is not owned by the current user or is wrong category | Return `400 VALIDATION_ERROR` |
 | Gallery item requested for avatar update is missing or not owned | Return `404 NOT_FOUND` |
 | `beforeinstallprompt` not available in browser | Keep app usable and show install affordance as non-blocking UI |
+| Mock-login endpoint called while `AUTH_MODE=oidc` | Return `400 VALIDATION_ERROR`; do not create a mock session |
+| Upload bytes are not PNG, JPG, or WEBP | Return `400 VALIDATION_ERROR`; do not write file to disk |
+| Uploaded file passes byte detection | Store generated filename and detected MIME/extension, not client-provided MIME/extension |
 
 
 ### 5. Good/Base/Bad Cases

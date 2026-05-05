@@ -1,0 +1,6 @@
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Frontend workspace layout, route/API/style ownership, and validation commands for Dayu Avatar web app work."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"React component, Tailwind, mobile UI, accessibility, and browser smoke-test contracts for frontend changes."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Search-first and duplication avoidance guidance for safe, surgical fixes."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Boundary-check guidance for any API/frontend data-flow issues found during audit."}
+{"file":".trellis/tasks/05-05-audit-fix-project-issues/research/code-audit.md","reason":"Persisted source audit findings to guide safe implementation."}
+{"file":".trellis/tasks/05-05-audit-fix-project-issues/research/config-audit.md","reason":"Persisted config/build audit findings to guide safe implementation."}
