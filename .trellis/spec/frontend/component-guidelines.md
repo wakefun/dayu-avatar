@@ -55,7 +55,7 @@ import {
 - Stitch homepage setting controls:
   - `图片比例`: `1:1`, `3:4`, `9:16`
   - `图片分辨率`: `1K`, `2K`, `4K`
-  - `生成数量`: `1`, `2`, `4`, `8` (default `1`)
+  - `生成数量`: `1`, `2`, `3`, `6` (default `1`)
 
 ### 3. Contracts
 
