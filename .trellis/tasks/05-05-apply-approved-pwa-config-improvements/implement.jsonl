@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Frontend workspace contracts, Vite/PWA file locations, and validation commands."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"PWA install affordance and frontend UI validation expectations."}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Root env loading and API PORT contract that Vite proxy should mirror."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Existing auth/env/PWA wiring contracts and verification expectations."}
+{"file":".trellis/tasks/05-05-audit-fix-project-issues/research/config-audit.md","reason":"Approved deferred PWA/config findings to implement."}

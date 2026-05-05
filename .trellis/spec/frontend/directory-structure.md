@@ -19,6 +19,8 @@
 - Typecheck command: `pnpm --filter @dayu/web typecheck`.
 - Lint command: `pnpm --filter @dayu/web lint`.
 - Vite env typing: `apps/web/src/vite-env.d.ts`.
+- PWA service worker: `apps/web/public/sw.js`, included in `pnpm --filter @dayu/web lint`.
+- PWA icons: `apps/web/public/icon-192.png` and `apps/web/public/icon-512.png` referenced by `manifest.webmanifest`.
 
 ### 3. Contracts
 
@@ -29,6 +31,9 @@
 - `src/lib/api.ts` contains fetch wrappers for backend contracts.
 - `src/lib/types.ts` contains shared frontend API/domain types.
 - `src/styles.css` contains Tailwind import plus minimal theme/base globals; page-level business styling should live in components via Tailwind classes.
+- `public/sw.js` must use `/` fallback only for navigation requests; built Vite assets under `/assets/` may use runtime caching but must never receive cached HTML as a fallback.
+- `manifest.webmanifest` must reference explicit 192x192 and 512x512 PNG icon assets in `public/`.
+- `vite.config.ts` dev proxy should derive the API target from root `PORT` env/default `3001`, matching the API startup contract.
 
 ### 4. Validation & Error Matrix
 
@@ -36,6 +41,8 @@
 - New API call -> add typed function in `src/lib/api.ts` and matching type in `src/lib/types.ts`.
 - New Vite env usage -> ensure `vite-env.d.ts` remains present.
 - Protected page -> assume auth is checked by `App.tsx`; do not duplicate login redirects inside every page.
+- Service worker change -> run web lint and build; verify non-navigation `/assets/` failures do not fall back to cached `/` HTML.
+- Manifest icon change -> verify referenced icon files exist and their actual dimensions match declared sizes.
 
 ### 5. Good/Base/Bad Cases
 

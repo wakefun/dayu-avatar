@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Verify frontend commands and expected file ownership after changes."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Check PWA install affordance and frontend smoke expectations."}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Check Vite proxy respects API PORT/root env contract without exposing secrets."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Check env/PWA verification requirements remain aligned."}
+{"file":".trellis/tasks/05-05-audit-fix-project-issues/research/config-audit.md","reason":"Verify all approved findings were addressed or intentionally documented."}
