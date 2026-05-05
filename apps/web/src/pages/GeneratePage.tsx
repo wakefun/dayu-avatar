@@ -99,8 +99,8 @@ export function GeneratePage() {
   const [styleAssets, setStyleAssets] = useState<Asset[]>([]);
   const [prompt, setPrompt] = useState('');
   const [insertedStyleTags, setInsertedStyleTags] = useState<string[]>([]);
-  const [ratio, setRatio] = useState<RatioValue>('3:4');
-  const [resolution, setResolution] = useState<ResolutionValue>('1k');
+  const [ratio, setRatio] = useState<RatioValue>('1:1');
+  const [resolution, setResolution] = useState<ResolutionValue>('2k');
   const [quantity, setQuantity] = useState<QuantityValue>('1');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -360,7 +360,7 @@ function roundToMultipleOf16(value: number) {
 function parseControlsFromSize(size: string | undefined): { ratio: RatioValue; resolution: ResolutionValue } {
   const match = size?.match(/^(\d+)x(\d+)$/);
   if (!match) {
-    return { ratio: '3:4', resolution: '1k' };
+    return { ratio: '1:1', resolution: '2k' };
   }
 
   const width = Number(match[1]);
