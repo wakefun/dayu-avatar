@@ -137,3 +137,36 @@ Changed homepage generation defaults to ratio 1:1 and resolution 2K, verified we
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: Update generation quantity options
+
+**Date**: 2026-05-06
+**Task**: Update generation quantity options
+**Branch**: `main`
+
+### Summary
+
+Changed homepage generation quantity candidates to 1, 2, 3, and 6, updated the frontend spec, and verified web lint/typecheck/build.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `70b79d2` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

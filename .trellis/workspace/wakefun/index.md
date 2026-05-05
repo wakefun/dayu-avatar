@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 4
+- **Total Sessions**: 5
 - **Last Active**: 2026-05-06
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~139 | Active |
+| `journal-1.md` | ~172 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 5 | 2026-05-06 | Update generation quantity options | `70b79d2` | `main` |
 | 4 | 2026-05-06 | Update homepage generation defaults | `f08de2f` | `main` |
 | 3 | 2026-05-05 | Audit and harden avatar app | `bc3c699` | `main` |
 | 2 | 2026-05-05 | Adopt Trellis shared asset tracking | `4c0a2f1` | `main` |
