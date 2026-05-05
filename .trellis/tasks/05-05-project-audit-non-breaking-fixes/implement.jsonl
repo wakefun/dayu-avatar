@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Frontend package structure, validation commands, PWA contracts, and browser smoke requirements."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Mobile UI component, navigation, upload, gallery, and lightbox contracts relevant to audit fixes."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Pre-modification search and reuse checks for safe targeted fixes."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Frontend/backend API contract and data-flow audit guidance."}

@@ -10,14 +10,19 @@ import type {
   User,
 } from './types';
 
-async function request<T>(input: RequestInfo, init?: RequestInit): Promise<T> {
+async function request<T>(input: RequestInfo, init: RequestInit = {}): Promise<T> {
+  const { headers, body, ...rest } = init;
+  const requestHeaders = new Headers(headers);
+
+  if (typeof body === 'string' && !requestHeaders.has('Content-Type')) {
+    requestHeaders.set('Content-Type', 'application/json');
+  }
+
   const response = await fetch(input, {
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(init?.headers ?? {}),
-    },
-    ...init,
+    ...rest,
+    body,
+    headers: requestHeaders,
   });
 
   const isJson = response.headers.get('content-type')?.includes('application/json');

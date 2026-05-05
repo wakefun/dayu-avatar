@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { chipButtonClass, cx } from './ui';
 
 type ImageLightboxAction = {
@@ -21,6 +22,24 @@ type ImageLightboxProps = {
 };
 
 export function ImageLightbox({ image, actions = [], onClose }: ImageLightboxProps) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!image) {
+      return;
+    }
+
+    closeButtonRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [image, onClose]);
+
   if (!image) {
     return null;
   }
@@ -30,10 +49,12 @@ export function ImageLightbox({ image, actions = [], onClose }: ImageLightboxPro
       className="fixed inset-0 z-[80] grid place-items-center bg-[rgba(33,27,24,0.76)] px-[14px] pt-[max(16px,env(safe-area-inset-top))] pb-[max(18px,env(safe-area-inset-bottom))]"
       role="dialog"
       aria-modal="true"
+      aria-label={image.alt}
       onClick={onClose}
     >
       <div className="relative grid max-h-full w-full max-w-[430px] gap-3" onClick={(event) => event.stopPropagation()}>
         <button
+          ref={closeButtonRef}
           type="button"
           className="absolute top-2.5 right-2.5 z-10 grid h-10 w-10 place-items-center rounded-full bg-white/90 text-2xl text-[#2f2724]"
           onClick={onClose}

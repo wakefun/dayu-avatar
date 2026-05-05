@@ -37,7 +37,7 @@ db.exec('PRAGMA foreign_keys = ON');
 ### 3. Contracts
 
 - `file_assets.storage_path` stores a relative local path under `uploads/...` or `generated/...`.
-- `file_assets.public_url` must be a static URL under `/static/uploads/...` or `/static/generated/...`.
+- `file_assets.public_url` must be a static URL under `/static/uploads/...` or `/static/generated/...`; these routes set private caching, `Referrer-Policy: no-referrer`, and `X-Content-Type-Options: nosniff` while the public URL contract remains unchanged.
 - `generation_tasks.status` is one of `queued`, `processing`, `completed`, `failed`, `canceled`.
 - `generation_tasks.summary` stores the user-facing short task summary shown in queue/history cards.
 - `generation_tasks.personal_reference_asset_ids_json` stores a JSON string array of 1-3 personal reference asset ids.
@@ -72,7 +72,7 @@ db.exec('PRAGMA foreign_keys = ON');
 - Runtime smoke test should create a mock login, upload both reference categories, create a generation task, poll completion, save a result to gallery, and verify queue/history/gallery lists include the data.
 - Add a multi-reference smoke path that uploads at least 2 personal references and 1 style reference, then asserts the task/history payload still returns all assets in order.
 - Add a legacy-row compatibility assertion that a task without `*_asset_ids_json` still returns one-element arrays from the API.
-- Static file smoke test should confirm generated/uploaded image URLs resolve while `data/app.db` is not publicly exposed.
+- Static file smoke test should confirm generated/uploaded image URLs resolve with private/no-referrer/nosniff headers while `data/app.db` is not publicly exposed.
 
 ### 7. Wrong vs Correct
 

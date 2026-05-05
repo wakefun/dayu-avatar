@@ -48,7 +48,7 @@ export function UploadCard({ title, description, actionLabel, iconLabel, values,
               <strong className="text-[15px] text-[#2f2724]">{actionLabel}</strong>
               <span className="text-sm text-[#6b5f59]">支持 PNG / JPG / WEBP</span>
             </div>
-            <input className="hidden" type="file" accept={acceptedImageTypes} onChange={(event) => handleFileInput(event, onAdd)} />
+            <input className="sr-only" type="file" accept={acceptedImageTypes} onChange={(event) => handleFileInput(event, onAdd)} />
           </label>
         ) : (
           values.map((asset, index) => (
@@ -82,7 +82,7 @@ export function UploadCard({ title, description, actionLabel, iconLabel, values,
             aria-label={actionLabel}
           >
             <span className="grid h-12 w-12 place-items-center rounded-full bg-white/20 text-[26px] font-bold text-white">＋</span>
-            <input className="hidden" type="file" accept={acceptedImageTypes} onChange={(event) => handleFileInput(event, onAdd)} />
+            <input className="sr-only" type="file" accept={acceptedImageTypes} onChange={(event) => handleFileInput(event, onAdd)} />
           </label>
         ) : null}
       </div>

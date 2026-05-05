@@ -1,0 +1,3 @@
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Required validation: lint, typecheck, build, and browser smoke checks."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"UI behavior contracts to verify after fixes."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Verify cross-layer request/response and edge-case behavior."}

@@ -6,19 +6,25 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
-const apiPort = process.env.PORT ?? readRootEnvValue('PORT') ?? '3001';
+const apiPort = normalizePort(process.env.PORT ?? readRootEnvValue('PORT'));
 const apiTarget = `http://localhost:${apiPort}`;
 
 export default defineConfig({
   plugins: [tailwindcss(), react()],
   server: {
     port: 5173,
+    strictPort: true,
     proxy: {
       '/api': apiTarget,
       '/static': apiTarget,
     },
   },
 });
+
+function normalizePort(value: string | null | undefined) {
+  const port = Number(value?.trim() || '3001');
+  return Number.isInteger(port) && port > 0 && port <= 65535 ? String(port) : '3001';
+}
 
 function readRootEnvValue(key: string) {
   let contents: string;

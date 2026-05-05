@@ -52,6 +52,7 @@ api.createTask({
 - Frontend sends array-based reference ids to `POST /api/generation-tasks`; it must not send only the legacy single-id fields.
 - Frontend reads `promptSummary`/`summary` from API payloads instead of truncating raw prompts locally for cards.
 - History items must carry `prompt`, `styleTags`, `personalReferenceAssets`, `styleReferenceAssets`, and `generationParams` so navigation state can prefill the generation page.
+- Result routes must fetch task status before fetching `/result`; queued/processing tasks redirect to loading, and failed/canceled tasks show terminal copy instead of claiming a result is ready.
 - Gallery items must carry `width` and `height` so masonry cards and fullscreen preview preserve image aspect ratio.
 - `api.setAvatarFromGallery(galleryItemId)` returns `{ user }`; callers should refresh topbar/settings avatar from that response rather than guessing the URL.
 
@@ -60,6 +61,8 @@ api.createTask({
 - Missing `prompt`/`styleTags`/reference arrays in history prefill state -> home page falls back to safe defaults and does not crash.
 - Missing `width`/`height` on images -> UI still renders, but without aspect-ratio overrides.
 - Backend returns only legacy single-id fields for old data -> frontend should rely on array fields already normalized by the API and avoid reconstructing arrays itself.
+- Result route opened for a queued or processing task -> redirect to `/generate/loading/:taskId` before requesting the result endpoint.
+- Result route opened for a failed or canceled task -> show terminal error/canceled copy and do not call `/api/generation-tasks/:taskId/result`.
 - `setAvatarFromGallery` fails -> keep existing avatar UI until a successful response arrives.
 
 ### 5. Good/Base/Bad Cases

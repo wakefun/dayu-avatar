@@ -70,6 +70,8 @@ export function AppShell({ title, user, drawerOpen, installAvailable, onOpenDraw
           drawerOpen ? 'pointer-events-auto opacity-100' : 'pointer-events-none opacity-0'
         )}
         onClick={onCloseDrawer}
+        tabIndex={drawerOpen ? 0 : -1}
+        aria-hidden={!drawerOpen}
         aria-label="关闭导航菜单"
       />
 
@@ -107,13 +109,16 @@ export function AppShell({ title, user, drawerOpen, installAvailable, onOpenDraw
                 )
               }
               onClick={onCloseDrawer}
+              tabIndex={drawerOpen ? undefined : -1}
             >
               {item.label}
             </NavLink>
           ))}
           <button
             type="button"
-            className="rounded-[18px] bg-white/82 px-4 py-[14px] text-left text-[15px] text-[#2f2724] transition hover:bg-white"
+            className="rounded-[18px] bg-white/82 px-4 py-[14px] text-left text-[15px] text-[#2f2724] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={!installAvailable}
+            tabIndex={drawerOpen ? undefined : -1}
             onClick={onInstallApp}
           >
             {installAvailable ? '添加到桌面' : '当前浏览器暂不支持安装'}

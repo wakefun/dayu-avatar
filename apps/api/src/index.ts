@@ -197,7 +197,7 @@ const dataRoot = path.join(repoRoot, 'data');
 const uploadsRoot = path.join(dataRoot, 'uploads');
 const generatedRoot = path.join(dataRoot, 'generated');
 const dbPath = path.join(dataRoot, 'app.db');
-const port = Number(process.env.PORT ?? 3001);
+const port = parsePort(process.env.PORT, 3001);
 const webOrigin = process.env.WEB_ORIGIN ?? 'http://localhost:5173';
 const sessionSecret = process.env.SESSION_SECRET ?? 'dayu-avatar-dev-secret';
 const authMode = parseMode<AuthMode>(process.env.AUTH_MODE, ['mock', 'oidc'], 'mock');
@@ -322,8 +322,8 @@ app.use(
     },
   })
 );
-app.use('/static/uploads', express.static(uploadsRoot));
-app.use('/static/generated', express.static(generatedRoot));
+app.use('/static/uploads', express.static(uploadsRoot, { setHeaders: setPrivateMediaHeaders }));
+app.use('/static/generated', express.static(generatedRoot, { setHeaders: setPrivateMediaHeaders }));
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
@@ -858,7 +858,7 @@ app.patch('/api/gallery-items/:itemId', requireAuth, (req, res) => {
     return;
   }
 
-  const isFavorited = Boolean(req.body?.isFavorited);
+  const isFavorited = req.body?.isFavorited === true;
   db.prepare('UPDATE gallery_items SET is_favorited = ? WHERE id = ?').run(isFavorited ? 1 : 0, item.id);
   res.json({ item: mapGalleryItem(item.id) });
 });
@@ -923,8 +923,8 @@ app.get('/api/gallery-items/:itemId/download', requireAuth, (req, res) => {
 });
 
 app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
-  void next;
   if (res.headersSent) {
+    next(err);
     return;
   }
   const status = isValidationLikeError(err) ? 400 : 500;
@@ -934,6 +934,12 @@ app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
 app.listen(port, () => {
   console.log(`dayu api listening on http://localhost:${port} (auth=${authMode}, generation=${generationMode})`);
 });
+
+function setPrivateMediaHeaders(res: Response) {
+  res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+}
 
 function initSchema() {
   db.exec(`
@@ -3054,6 +3060,11 @@ function mix(from: number, to: number, ratio: number) {
 
 function clamp(value: number) {
   return Math.max(0, Math.min(255, Math.round(value)));
+}
+
+function parsePort(value: string | undefined, fallback: number) {
+  const parsed = Number(value?.trim() || fallback);
+  return Number.isInteger(parsed) && parsed > 0 && parsed <= 65535 ? parsed : fallback;
 }
 
 function parseMode<T extends string>(value: string | undefined, validValues: readonly T[], fallback: T): T {

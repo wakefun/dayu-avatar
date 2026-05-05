@@ -86,11 +86,13 @@ import {
 - Style chip click toggles selected state -> change to one-shot snippet insertion with no active style.
 - Resolution or quantity preference is not fully supported by backend -> keep visual control but add helper copy that states the current MVP output behavior.
 - Action inside a card would also trigger parent navigation -> split into separate `<button>` / `<a>` elements.
+- Drawer is closed -> overlay and drawer descendants must not remain tabbable.
 - Drawer is open -> provide an overlay/close path and real navigation links.
 - Upload control -> use image-specific accept behavior and show selected file state.
 - Destructive gallery delete -> keep it an explicit button action.
 - History regenerate should preserve prompt/style/reference/generation settings in navigation state; missing fields break home-page prefill.
 - Fullscreen preview footer actions must stay touch-reachable and cannot depend on hover-only controls.
+- Fullscreen preview dialog must have an accessible label, focus an explicit close control on open, and close on Escape.
 - Result image styling must use real image dimensions when available; hard-coded aspect ratio reintroduces cropping.
 - Gallery masonry cards should not add captions or inline action rows back into the grid.
 

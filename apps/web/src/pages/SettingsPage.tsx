@@ -15,7 +15,7 @@ const avatarClass =
 
 export function SettingsPage({ user, session, onLogout }: SettingsPageProps) {
   const navigate = useNavigate();
-  const authModeLabel = session?.authMode === 'oidc' ? '已连接大宇统一登录' : '当前会话由大宇统一登录接入';
+  const authModeLabel = session?.authMode === 'oidc' ? '已连接大宇统一登录' : session?.authMode === 'mock' ? '模拟登录体验模式' : '未获取会话信息';
 
   return (
     <div className={pageStackClass}>

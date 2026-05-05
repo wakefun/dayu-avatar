@@ -18,12 +18,23 @@ export function ResultPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const [taskResponse, resultResponse, galleryResponse] = await Promise.all([
-          api.getTask(taskId),
-          api.getTaskResult(taskId),
-          api.getGallery(),
-        ]);
+        setError(null);
+        setResult(null);
+        setSavedItem(null);
+        const taskResponse = await api.getTask(taskId);
         setTask(taskResponse.task);
+
+        if (taskResponse.task.status === 'queued' || taskResponse.task.status === 'processing') {
+          navigate(`/generate/loading/${taskId}`, { replace: true });
+          return;
+        }
+
+        if (taskResponse.task.status !== 'completed') {
+          setError(taskResponse.task.error?.message ?? '这个任务还没有可查看的生成结果');
+          return;
+        }
+
+        const [resultResponse, galleryResponse] = await Promise.all([api.getTaskResult(taskId), api.getGallery()]);
         setResult(resultResponse.result);
         const matched = galleryResponse.items.find((item) => item.generationResultId === resultResponse.result.id) ?? null;
         setSavedItem(matched);
@@ -31,11 +42,16 @@ export function ResultPage() {
         setError(requestError instanceof Error ? requestError.message : '获取结果失败');
       }
     })();
-  }, [taskId]);
+  }, [navigate, taskId]);
+
+  const resultSectionSubtitle =
+    task?.status === 'failed' || task?.status === 'canceled'
+      ? '这个任务没有可查看的生成结果，你可以回到生成页重新生成。'
+      : '结果已准备完成，你可以保存到图库、下载原图或继续生成新的版本。';
 
   return (
     <div className={pageStackClass}>
-      <PageSection subtitle="结果已准备完成，你可以保存到图库、下载原图或继续生成新的版本。">
+      <PageSection subtitle={resultSectionSubtitle}>
         {result?.imageUrl ? (
           <button
             type="button"
