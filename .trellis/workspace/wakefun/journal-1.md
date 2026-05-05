@@ -71,3 +71,36 @@ Updated the repo to stop ignoring .trellis wholesale, keep only Trellis local/ru
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: Audit and harden avatar app
+
+**Date**: 2026-05-05
+**Task**: Audit and harden avatar app
+**Branch**: `main`
+
+### Summary
+
+Audited frontend, PWA/config, backend/runtime boundaries; applied non-breaking hardening for static media headers, result-route state handling, accessibility, API request headers, port validation, and documented risky follow-ups.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bc3c699` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
