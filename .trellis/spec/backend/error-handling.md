@@ -138,7 +138,9 @@ OPENAI_REQUEST_TIMEOUT_MS           # optional, defaults to 600000ms; invalid or
 - `GET /api/history` items include `prompt`, `styleTags`, `personalReferenceAssets`, `styleReferenceAssets`, and `generationParams` so the frontend can navigate home with a prefilled draft instead of creating an immediate retry task.
 - `GET /api/gallery-items` items include original image width/height so the masonry grid and fullscreen preview can preserve aspect ratio.
 - `POST /api/users/me/avatar` updates `users.avatar_asset_id` from a user-owned gallery item and returns the refreshed `user` payload.
-- Frontend PWA wiring uses `manifest.webmanifest`, `sw.js`, and browser `beforeinstallprompt`; the install action is a UI affordance only and must not block normal app usage.
+- Frontend PWA wiring uses `manifest.webmanifest`, a Workbox-generated service worker from `vite-plugin-pwa`, and browser `beforeinstallprompt`; the install action is a UI affordance only and must not block normal app usage.
+- `GET /api/generation-tasks/:taskId/events` is an authenticated SSE endpoint that emits `task` events with `{ task }` using the same task shape as `GET /api/generation-tasks/:taskId`.
+- `GET /api/queue/events` is an authenticated SSE endpoint that emits `queue` events with `{ items }` using the same item shape as `GET /api/queue`.
 
 
 ### 4. Validation & Error Matrix
@@ -155,6 +157,10 @@ OPENAI_REQUEST_TIMEOUT_MS           # optional, defaults to 600000ms; invalid or
 | Any style reference asset id is not owned by the current user or is wrong category | Return `400 VALIDATION_ERROR` |
 | Gallery item requested for avatar update is missing or not owned | Return `404 NOT_FOUND` |
 | `beforeinstallprompt` not available in browser | Keep app usable and show install affordance as non-blocking UI |
+| SSE task stream opened for missing/not-owned task | Return JSON `404 NOT_FOUND` before stream headers are sent |
+| SSE stream emits terminal task status | Emit the terminal snapshot, then close the stream |
+| SSE stream has an unexpected sync failure after headers are sent | Emit an SSE `error` event and close the stream without trying to send JSON error payload |
+| Workbox handles `/static/uploads/**` or `/static/generated/**` | Do not cache these URLs and do not serve app-shell HTML as their offline fallback |
 | Mock-login endpoint called while `AUTH_MODE=oidc` | Return `400 VALIDATION_ERROR`; do not create a mock session |
 | Upload bytes are not PNG, JPG, or WEBP | Return `400 VALIDATION_ERROR`; do not write file to disk |
 | Uploaded file passes byte detection | Store generated filename and detected MIME/extension, not client-provided MIME/extension |

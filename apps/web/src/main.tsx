@@ -11,13 +11,3 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </BrowserRouter>
   </React.StrictMode>
 );
-
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js').catch((error: unknown) => {
-      if (import.meta.env.DEV) {
-        console.warn('Service worker registration failed', error);
-      }
-    });
-  });
-}

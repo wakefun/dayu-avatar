@@ -1,0 +1,10 @@
+{"file":".trellis/tasks/05-05-implement-approved-optimizations/prd.md","reason":"Acceptance criteria and rejected out-of-scope items to verify."}
+{"file":".trellis/tasks/05-05-implement-approved-optimizations/research/font-fallback.md","reason":"Verify font implementation keeps Google first and local fallback second."}
+{"file":".trellis/tasks/05-05-implement-approved-optimizations/research/realtime-approach.md","reason":"Verify SSE implementation preserves auth, payload shape, and removes fixed polling loops."}
+{"file":".trellis/tasks/05-05-implement-approved-optimizations/research/pwa-plugin-migration.md","reason":"Verify Workbox migration preserves navigation/assets behavior and avoids static media caching."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Check frontend behavior and browser smoke expectations."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Check frontend API type contracts and no duplicate page-local response shapes."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Check PWA app shell and asset fallback contract."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Check backend route/session/error behavior for stream endpoints."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Check task status/static media contracts remain intact."}
+{"file":".trellis/spec/guides/index.md","reason":"Check cross-layer/code-reuse concerns for multi-layer changes."}

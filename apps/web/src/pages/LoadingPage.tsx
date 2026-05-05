@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PageSection } from '../components/PageSection';
 import { api } from '../lib/api';
-import type { GenerationTask } from '../lib/types';
+import type { TaskStreamPayload } from '../lib/types';
 import { cx, pageStackClass, primaryButtonClass, secondaryButtonClass } from '../components/ui';
 
 const steps = ['分析个人形象', '提取风格氛围', '生成头像构图', '高清细化中'];
@@ -10,42 +10,46 @@ const steps = ['分析个人形象', '提取风格氛围', '生成头像构图',
 export function LoadingPage() {
   const { taskId = '' } = useParams();
   const navigate = useNavigate();
-  const [task, setTask] = useState<GenerationTask | null>(null);
+  const [task, setTask] = useState<TaskStreamPayload['task'] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let stopped = false;
-    const tick = async () => {
-      try {
-        const response = await api.getTask(taskId);
-        if (stopped) {
-          return;
-        }
-        setTask(response.task);
-        setError(null);
-        if (response.task.status === 'completed') {
-          navigate(`/generate/result/${taskId}`);
-          return;
-        }
-        if (response.task.status === 'failed' || response.task.status === 'canceled') {
-          window.clearInterval(timer);
-          return;
-        }
-      } catch (requestError) {
-        if (!stopped) {
-          setError(requestError instanceof Error ? requestError.message : '获取任务失败');
-        }
-      }
-    };
+    const eventSource = api.streamTask(taskId);
+    let terminal = false;
 
-    const timer = window.setInterval(() => {
-      void tick();
-    }, 1500);
-    void tick();
-    return () => {
-      stopped = true;
-      window.clearInterval(timer);
-    };
+    eventSource.addEventListener('task', (event) => {
+      const { task: nextTask } = JSON.parse(event.data) as TaskStreamPayload;
+      setTask(nextTask);
+      setError(null);
+
+      if (nextTask.status === 'completed') {
+        terminal = true;
+        eventSource.close();
+        navigate(`/generate/result/${taskId}`);
+      }
+
+      if (nextTask.status === 'failed' || nextTask.status === 'canceled') {
+        terminal = true;
+        eventSource.close();
+      }
+    });
+
+    eventSource.addEventListener('error', () => {
+      if (!terminal) {
+        void api
+          .getTask(taskId)
+          .then((response) => {
+            setTask(response.task);
+            setError(null);
+          })
+          .catch((requestError: unknown) => {
+            setError(requestError instanceof Error ? requestError.message : '获取任务失败');
+          });
+      }
+      eventSource.close();
+    });
+
+    return () => eventSource.close();
   }, [navigate, taskId]);
 
   const isTerminalFailure = task?.status === 'failed' || task?.status === 'canceled';

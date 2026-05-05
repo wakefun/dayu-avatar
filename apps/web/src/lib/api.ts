@@ -77,6 +77,7 @@ export const api = {
     };
   }) => request<CreateGenerationTaskResponse>('/api/generation-tasks', { method: 'POST', body: JSON.stringify(body) }),
   getTask: (taskId: string) => request<{ task: GenerationTask }>(`/api/generation-tasks/${taskId}`),
+  streamTask: (taskId: string) => new EventSource(`/api/generation-tasks/${encodeURIComponent(taskId)}/events`),
   getTaskProgress: (taskId: string) =>
     request<{ taskId: string; status: GenerationTask['status']; progress: { percent: number; step: string | null; message: string } }>(
       `/api/generation-tasks/${taskId}/progress`
@@ -84,6 +85,7 @@ export const api = {
   getTaskResult: (taskId: string) => request<{ result: GenerationResult }>(`/api/generation-tasks/${taskId}/result`),
   retryTask: (taskId: string) => request<{ task: GenerationTask }>(`/api/generation-tasks/${taskId}/retry`, { method: 'POST', body: JSON.stringify({}) }),
   getQueue: () => request<{ items: QueueItem[] }>('/api/queue'),
+  streamQueue: () => new EventSource('/api/queue/events'),
   getHistory: () => request<{ items: HistoryItem[] }>('/api/history'),
   getGallery: () => request<{ items: GalleryItem[] }>('/api/gallery-items'),
   saveGallery: (generationResultId: string) =>

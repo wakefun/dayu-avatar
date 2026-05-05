@@ -3,24 +3,27 @@ import { useNavigate } from 'react-router-dom';
 import { QueueCard } from '../components/Cards';
 import { PageSection } from '../components/PageSection';
 import { api } from '../lib/api';
-import type { QueueItem } from '../lib/types';
+import type { QueueStreamPayload } from '../lib/types';
 import { pageStackClass } from '../components/ui';
 
 export function QueuePage() {
   const navigate = useNavigate();
-  const [items, setItems] = useState<QueueItem[]>([]);
-
-  const load = async () => {
-    const response = await api.getQueue();
-    setItems(response.items);
-  };
+  const [items, setItems] = useState<QueueStreamPayload['items']>([]);
 
   useEffect(() => {
-    void load();
-    const timer = window.setInterval(() => {
-      void load();
-    }, 2000);
-    return () => window.clearInterval(timer);
+    const eventSource = api.streamQueue();
+
+    eventSource.addEventListener('queue', (event) => {
+      const payload = JSON.parse(event.data) as QueueStreamPayload;
+      setItems(payload.items);
+    });
+
+    eventSource.addEventListener('error', () => {
+      eventSource.close();
+      void api.getQueue().then((response) => setItems(response.items));
+    });
+
+    return () => eventSource.close();
   }, []);
 
   return (

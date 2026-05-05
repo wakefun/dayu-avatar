@@ -625,6 +625,72 @@ app.get('/api/generation-tasks/:taskId', requireAuth, async (req, res, next) => 
   }
 });
 
+app.get('/api/generation-tasks/:taskId/events', requireAuth, async (req, res, next) => {
+  try {
+    const userId = req.session.userId!;
+    const taskId = getRouteParam(req.params.taskId);
+    const initialTask = await syncAndGetOwnedTask(userId, taskId);
+
+    if (!initialTask) {
+      sendError(res, 404, 'NOT_FOUND', 'task not found');
+      return;
+    }
+
+    prepareSseResponse(res);
+    let lastSerialized = '';
+    let timer: NodeJS.Timeout | null = null;
+    let closed = false;
+
+    const closeStream = () => {
+      closed = true;
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+      if (!res.writableEnded) {
+        res.end();
+      }
+    };
+
+    const sendSnapshot = async () => {
+      if (closed) {
+        return;
+      }
+
+      const task = await syncAndGetOwnedTask(userId, taskId);
+      if (!task) {
+        writeSseEvent(res, 'error', { message: 'task not found' });
+        closeStream();
+        return;
+      }
+
+      const payload = { task: mapTask(task, true) };
+      const serialized = JSON.stringify(payload);
+      if (serialized !== lastSerialized) {
+        lastSerialized = serialized;
+        writeSseEvent(res, 'task', payload);
+      }
+
+      if (isTerminalTaskStatus(task.status)) {
+        closeStream();
+      }
+    };
+
+    req.on('close', closeStream);
+    await sendSnapshot();
+    if (!closed) {
+      timer = setInterval(() => {
+        void sendSnapshot().catch(() => {
+          writeSseEvent(res, 'error', { message: 'task stream failed' });
+          closeStream();
+        });
+      }, 1000);
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/generation-tasks/:taskId/progress', requireAuth, async (req, res, next) => {
   try {
     const taskId = getRouteParam(req.params.taskId);
@@ -715,25 +781,55 @@ app.post('/api/generation-tasks/:taskId/retry', requireAuth, (req, res) => {
 
 app.get('/api/queue', requireAuth, async (req, res, next) => {
   try {
-    await syncUserTasks(req.session.userId!);
-    const rows = db
-      .prepare('SELECT * FROM generation_tasks WHERE user_id = ? ORDER BY datetime(created_at) DESC')
-      .all(req.session.userId!) as TaskRow[];
+    const items = await getQueueItems(req.session.userId!);
+    res.json({ items });
+  } catch (error) {
+    next(error);
+  }
+});
 
-    res.json({
-      items: rows.map((task) => ({
-        id: task.id,
-        status: task.status,
-        summary: getTaskSummary(task),
-        progress: {
-          percent: task.progress_percent,
-          step: task.progress_step,
-        },
-        createdAt: task.created_at,
-        resultUrl: task.status === 'completed' ? `/generate/result/${task.id}` : null,
-        errorMessage: task.error_message,
-      })),
-    });
+app.get('/api/queue/events', requireAuth, async (req, res, next) => {
+  try {
+    const userId = req.session.userId!;
+    prepareSseResponse(res);
+    let lastSerialized = '';
+    let timer: NodeJS.Timeout | null = null;
+    let closed = false;
+
+    const closeStream = () => {
+      closed = true;
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+      if (!res.writableEnded) {
+        res.end();
+      }
+    };
+
+    const sendSnapshot = async () => {
+      if (closed) {
+        return;
+      }
+
+      const payload = { items: await getQueueItems(userId) };
+      const serialized = JSON.stringify(payload);
+      if (serialized !== lastSerialized) {
+        lastSerialized = serialized;
+        writeSseEvent(res, 'queue', payload);
+      }
+    };
+
+    req.on('close', closeStream);
+    await sendSnapshot();
+    if (!closed) {
+      timer = setInterval(() => {
+        void sendSnapshot().catch(() => {
+          writeSseEvent(res, 'error', { message: 'queue stream failed' });
+          closeStream();
+        });
+      }, 1500);
+    }
   } catch (error) {
     next(error);
   }
@@ -2037,6 +2133,42 @@ function mapUser(user: UserRow) {
     email: user.email,
     avatarUrl,
   };
+}
+
+function prepareSseResponse(res: Response) {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+}
+
+function writeSseEvent(res: Response, event: string, payload: unknown) {
+  res.write(`event: ${event}\n`);
+  res.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+
+function isTerminalTaskStatus(status: TaskStatus) {
+  return status === 'completed' || status === 'failed' || status === 'canceled';
+}
+
+async function getQueueItems(userId: string) {
+  await syncUserTasks(userId);
+  const rows = db
+    .prepare('SELECT * FROM generation_tasks WHERE user_id = ? ORDER BY datetime(created_at) DESC')
+    .all(userId) as TaskRow[];
+
+  return rows.map((task) => ({
+    id: task.id,
+    status: task.status,
+    summary: getTaskSummary(task),
+    progress: {
+      percent: task.progress_percent,
+      step: task.progress_step,
+    },
+    createdAt: task.created_at,
+    resultUrl: task.status === 'completed' ? `/generate/result/${task.id}` : null,
+    errorMessage: task.error_message,
+  }));
 }
 
 function mapAsset(asset: AssetRow) {

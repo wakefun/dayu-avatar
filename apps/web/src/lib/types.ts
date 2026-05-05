@@ -84,6 +84,14 @@ export type QueueItem = {
   errorMessage: string | null;
 };
 
+export type TaskStreamPayload = {
+  task: GenerationTask;
+};
+
+export type QueueStreamPayload = {
+  items: QueueItem[];
+};
+
 export type HistoryItem = {
   id: string;
   status: GenerationTask['status'];

@@ -19,13 +19,5 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
     },
-  },
-  {
-    files: ['apps/web/public/sw.js'],
-    languageOptions: {
-      globals: {
-        ...globals.serviceworker,
-      },
-    },
   }
 );

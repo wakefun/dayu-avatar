@@ -1,0 +1,10 @@
+{"file":".trellis/tasks/05-05-implement-approved-optimizations/prd.md","reason":"Approved optimization requirements, scope exclusions, acceptance criteria, and chosen technical approach."}
+{"file":".trellis/tasks/05-05-implement-approved-optimizations/research/font-fallback.md","reason":"Font fallback research and recommended Google-first CSS strategy."}
+{"file":".trellis/tasks/05-05-implement-approved-optimizations/research/realtime-approach.md","reason":"Realtime transport research and SSE route/page implementation guidance."}
+{"file":".trellis/tasks/05-05-implement-approved-optimizations/research/pwa-plugin-migration.md","reason":"Workbox/Vite PWA plugin migration behavior, cache exclusions, and validation guidance."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Frontend styling/accessibility and browser smoke expectations for pages/components."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Frontend API boundary types and task/queue/result contract guidance."}
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Frontend PWA service worker/app shell contract and validation guidance."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Backend API/session/error contract guidance for new SSE endpoints."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Backend generation task status and static media URL/cache contract guidance."}
+{"file":".trellis/spec/guides/index.md","reason":"Shared cross-layer/code-reuse thinking guide index for multi-layer implementation."}

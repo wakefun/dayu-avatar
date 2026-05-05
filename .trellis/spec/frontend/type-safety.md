@@ -116,7 +116,7 @@ const cardTitle = item.summary;
 
 ## Type Organization
 
-- Define API boundary types centrally in `apps/web/src/lib/types.ts`.
+- SSE payload types belong in `apps/web/src/lib/types.ts` and should reuse existing `GenerationTask` / `QueueItem` aliases rather than redefining page-local stream shapes.
 - Keep page-local UI state types near the page component when they are not shared outside that route.
 
 ---
