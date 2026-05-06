@@ -33,10 +33,12 @@
   - `personal_reference`
   - `style_reference`
 
-- Generation page style suggestions:
+- Generation page style analysis display:
 
 ```tsx
-<ChipGroup tags={styleTags} onSelect={insertPromptSnippet} />
+<UploadCard category="style_reference" />
+{styleAnalysis ? <StyleSummary tags={styleAnalysis.tags} description={styleAnalysis.description} /> : null}
+```
 ```
 
 - Shared styling primitives:
@@ -67,7 +69,9 @@ import {
 - Allow inline `style` only for true runtime values such as `backgroundImage`, progress width, and image `aspectRatio`.
 - Do not add a bottom tab bar.
 - Generation/home page no longer uses a separate redundant intro hero card; the primary content starts with the upload and generation sections.
-- Reference upload cards must support 1-3 images in a fixed square container.
+- Uploaded style references trigger a concise style-analysis request; display returned tags and one short description below the upload card.
+- The generation custom text card is titled “个性化定制”; it is free-form user input, not a style-tag insertion surface.
+- User-entered customization copy has highest generation priority, but the frontend should only pass it as `prompt`; priority wording is enforced by the backend prompt builder.
 - Reference upload layout rules are contract-level UI behavior: 1 image fills the square, 2 images split into two vertical tiles, 3 images render two top tiles plus one full-width bottom tile.
 - When at least 1 reference image exists and count < 3, the card shows a bottom overlay add affordance rather than a separate extra button.
 - Multiple uploaded references must support explicit remove actions.
@@ -83,7 +87,8 @@ import {
 
 ### 4. Validation & Error Matrix
 
-- Style chip click toggles selected state -> change to one-shot snippet insertion with no active style.
+- Style-reference analysis loading -> clear stale displayed analysis immediately and disable submit until the current analysis request settles.
+- Style-reference analysis fails -> show a short user-facing error but keep upload controls usable.
 - Resolution or quantity preference is not fully supported by backend -> keep visual control but add helper copy that states the current MVP output behavior.
 - Action inside a card would also trigger parent navigation -> split into separate `<button>` / `<a>` elements.
 - Drawer is closed -> overlay and drawer descendants must not remain tabbable.
@@ -98,21 +103,22 @@ import {
 
 ### 5. Good/Base/Bad Cases
 
-- Good: `ChipGroup` renders style suggestions as plain buttons and calls `onSelect(tag)` to append a prompt snippet without active state.
+- Good: style reference uploads show concise model-derived tags and a short scene/lighting/palette description below the `UploadCard`.
+- Good: “个性化定制” remains a plain textarea; typed user requirements are sent as `prompt` without auto-inserting tag snippets.
 - Good: `UploadCard` owns the square 1/2/3-image layout, add-more overlay, remove buttons, and fullscreen-preview callbacks for both personal and style references.
 - Good: `HistoryCard` exposes a single bottom “再次生成” action while passing prefill-ready task data back to the home page.
 - Good: `GalleryCard` is just an image button plus optional favorite flower marker; fullscreen actions live in the shared lightbox footer.
 - Base: `ArtworkCard` renders image, metadata, and action buttons without hidden hover-only controls.
 - Bad: make the entire visual card clickable and nest retry/delete controls inside it.
-- Bad: render style suggestions as persistent selected filters when the product behavior is insert-only.
+- Bad: reintroduce style suggestion chips or automatic snippet insertion on the custom text card.
 - Bad: reintroduce a separate “选择图片” button below the square upload area once the overlay add affordance exists.
 
 ### 6. Tests Required
 
-- Browser smoke test should verify login, drawer navigation, generation controls, upload controls, style suggestion insertion, queue/history/gallery/settings pages, and save-to-gallery flow.
+- Browser smoke test should verify login, drawer navigation, generation controls, upload controls, automatic style-reference analysis display, queue/history/gallery/settings pages, and save-to-gallery flow.
 - `pnpm --filter @dayu/web lint`, `pnpm --filter @dayu/web typecheck`, and `pnpm --filter @dayu/web build` must pass after styling changes.
 - For future automated UI tests, assert buttons are reachable by text and do not cause double navigation/action.
-- For style suggestions, assert repeated clicks do not create a persistent selected visual state and do not duplicate the exact same snippet.
+- For style-reference analysis, assert upload/remove changes trigger fresh analysis, clear stale results while loading, and disable submit until analysis settles.
 - Add UI assertions for 1/2/3-image reference layouts, remove actions, lightbox open/close, history regenerate prefill navigation, queue completed/failed cards hiding progress bars, result image using native aspect ratio, and gallery masonry cards remaining image-only.
 
 ### 7. Wrong vs Correct
@@ -169,6 +175,19 @@ navigate('/', {
     generationParams: item.generationParams,
   },
 });
+```
+
+#### Wrong
+
+```tsx
+<ChipGroup tags={styleTags} onSelect={insertPromptSnippet} />
+```
+
+#### Correct
+
+```tsx
+<textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} />
+{styleAnalysis ? <StyleSummary tags={styleAnalysis.tags} description={styleAnalysis.description} /> : null}
 ```
 
 ---

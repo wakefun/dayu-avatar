@@ -163,6 +163,11 @@ type OpenAiChatResponse = {
   error?: OpenAiErrorPayload;
 };
 
+type StyleReferenceAnalysis = {
+  tags: string[];
+  description: string;
+};
+
 type OpenAiEditRequestVariant = {
   files: Array<{
     buffer: Buffer;
@@ -530,14 +535,36 @@ app.get('/api/uploads/:assetId', requireAuth, (req, res) => {
   res.json({ asset: mapAsset(asset) });
 });
 
+app.post('/api/style-reference-analysis', requireAuth, async (req, res, next) => {
+  try {
+    const assetIds = normalizeAssetIdList(req.body?.assetIds, null, 3);
+    if (assetIds.length === 0) {
+      sendError(res, 400, 'VALIDATION_ERROR', 'assetIds is required');
+      return;
+    }
+
+    const assets: AssetRow[] = [];
+    for (const assetId of assetIds) {
+      const asset = getOwnedAsset(req.session.userId!, assetId);
+      if (!asset || asset.category !== 'style_reference') {
+        sendError(res, 400, 'VALIDATION_ERROR', 'style reference asset is invalid');
+        return;
+      }
+      assets.push(asset);
+    }
+
+    res.json({ analysis: await analyzeStyleReferenceAssets(assets) });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post('/api/generation-tasks', requireAuth, async (req, res, next) => {
   try {
     const personalReferenceAssetIds = normalizeAssetIdList(req.body?.personalReferenceAssetIds, req.body?.personalReferenceAssetId, 3);
     const styleReferenceAssetIds = normalizeAssetIdList(req.body?.styleReferenceAssetIds, req.body?.styleReferenceAssetId ?? null, 3);
     const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
-    const styleTags = Array.isArray(req.body?.styleTags)
-      ? req.body.styleTags.filter((value: unknown): value is string => typeof value === 'string' && value.trim().length > 0)
-      : [];
+    const styleReferenceAnalysis = normalizeStyleReferenceAnalysis(req.body?.styleReferenceAnalysis);
     const requestedQuantity = Number(req.body?.quantity ?? 1);
     const quantity = Number.isFinite(requestedQuantity) ? Math.max(1, Math.min(8, Math.floor(requestedQuantity))) : 1;
     const generationParams = req.body?.generationParams ?? {};
@@ -567,9 +594,11 @@ app.post('/api/generation-tasks', requireAuth, async (req, res, next) => {
     const quality = typeof generationParams.quality === 'string' ? generationParams.quality : defaultImageQuality;
     const size = normalizeOpenAiSize(typeof generationParams.size === 'string' ? generationParams.size : '1024x1536');
     const outputFormat = typeof generationParams.outputFormat === 'string' ? generationParams.outputFormat : 'png';
+    const styleTags = styleReferenceAnalysis?.tags ?? [];
     const summary = await createTaskSummary({
       prompt,
       styleTags,
+      styleReferenceAnalysis,
       personalReferenceCount: personalReferenceAssetIds.length,
       styleReferenceCount: styleReferenceAssetIds.length,
       model,
@@ -1304,9 +1333,125 @@ function normalizeAssetIdList(value: unknown, fallback: unknown, maxCount: numbe
   return rawValues.filter((assetId): assetId is string => typeof assetId === 'string' && assetId.trim().length > 0).slice(0, maxCount);
 }
 
+function normalizeStyleReferenceAnalysis(value: unknown): StyleReferenceAnalysis | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const input = value as Partial<StyleReferenceAnalysis>;
+  const tags = Array.isArray(input.tags)
+    ? input.tags
+        .filter((tag): tag is string => typeof tag === 'string' && tag.trim().length > 0)
+        .map((tag) => tag.trim().slice(0, 12))
+        .filter((tag, index, values) => values.indexOf(tag) === index)
+        .slice(0, 6)
+    : [];
+  const description = typeof input.description === 'string' ? input.description.trim().slice(0, 80) : '';
+
+  if (tags.length === 0 || !description) {
+    return null;
+  }
+
+  return {
+    tags,
+    description,
+  };
+}
+
+async function analyzeStyleReferenceAssets(assets: AssetRow[]): Promise<StyleReferenceAnalysis> {
+  const fallback = buildFallbackStyleReferenceAnalysis(assets.length);
+  if (!openAiApiKey || !openAiBaseUrl) {
+    return fallback;
+  }
+
+  try {
+    const response = await fetch(buildOpenAiChatCompletionsUrl(openAiBaseUrl), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${openAiApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: defaultPromptModel,
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Analyze avatar style reference images. Return compact JSON only: {"tags":["tag1","tag2","tag3","tag4"],"description":"short Chinese style summary"}. Tags must be 2-6 short Chinese labels. Description must be one short Chinese sentence under 60 characters covering scene, lighting, and palette.',
+          },
+          {
+            role: 'user',
+            content: buildStyleAnalysisMessage(assets),
+          },
+        ],
+      }),
+      signal: AbortSignal.timeout(Math.min(openAiRequestTimeoutMs, 30_000)),
+    });
+
+    const payload = await readOpenAiChatResponse(response);
+    if (!response.ok) {
+      return fallback;
+    }
+
+    return parseStyleReferenceAnalysis(extractPromptText(payload)) ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function buildStyleAnalysisMessage(assets: AssetRow[]) {
+  return [
+    {
+      type: 'text',
+      text: [
+        `Style reference image count: ${assets.length}`,
+        'Extract only the visible style language: scene, lighting, color palette, composition, medium, texture, and atmosphere.',
+        'Do not identify people or copy identity from the reference images.',
+      ].join('\n'),
+    },
+    ...assets.map((asset) => ({
+      type: 'image_url',
+      image_url: {
+        url: buildAssetDataUrl(asset),
+      },
+    })),
+  ];
+}
+
+function parseStyleReferenceAnalysis(value: string): StyleReferenceAnalysis | null {
+  const jsonText = extractJsonObjectText(value);
+  if (!jsonText) {
+    return null;
+  }
+
+  try {
+    return normalizeStyleReferenceAnalysis(JSON.parse(jsonText));
+  } catch {
+    return null;
+  }
+}
+
+function extractJsonObjectText(value: string) {
+  const start = value.indexOf('{');
+  const end = value.lastIndexOf('}');
+  if (start < 0 || end <= start) {
+    return '';
+  }
+  return value.slice(start, end + 1);
+}
+
+function buildFallbackStyleReferenceAnalysis(count: number): StyleReferenceAnalysis {
+  return {
+    tags: count > 1 ? ['主图场景', '参考风格', '光影配色'] : ['参考构图', '风格还原', '光影配色'],
+    description: count > 1 ? '以主图场景为核心，融合参考图的光影、配色与质感。' : '提取参考图的场景、打光、配色与构图用于风格还原。',
+  };
+}
+
+
 async function createTaskSummary(input: {
   prompt: string;
   styleTags: string[];
+  styleReferenceAnalysis: StyleReferenceAnalysis | null;
   personalReferenceCount: number;
   styleReferenceCount: number;
   model: string;
@@ -1330,13 +1475,14 @@ async function createTaskSummary(input: {
         messages: [
           {
             role: 'system',
-            content: 'Return one short Chinese description for an avatar generation task. Use 6 to 16 Chinese characters. No markdown, punctuation, quotes, or explanation.',
+            content: 'Return one short Chinese title for an avatar generation task. Use 6 to 16 Chinese characters. No markdown, punctuation, quotes, or explanation.',
           },
           {
             role: 'user',
             content: [
-              `User prompt: ${input.prompt || '未填写'}`,
+              `User requirements: ${input.prompt || '未填写'}`,
               `Style tags: ${input.styleTags.length > 0 ? input.styleTags.join(' / ') : '无'}`,
+              `Style analysis: ${input.styleReferenceAnalysis?.description ?? '无'}`,
               `Personal reference images: ${input.personalReferenceCount}`,
               `Style reference images: ${input.styleReferenceCount}`,
               `Output size: ${input.size}`,
@@ -1358,7 +1504,7 @@ async function createTaskSummary(input: {
   }
 }
 
-function buildFallbackTaskSummary(input: { prompt: string; styleTags: string[]; personalReferenceCount: number; styleReferenceCount: number; size: string }) {
+function buildFallbackTaskSummary(input: { prompt: string; styleTags: string[]; styleReferenceAnalysis?: StyleReferenceAnalysis | null; personalReferenceCount: number; styleReferenceCount: number; size: string }) {
   const source = input.styleTags.length > 0 ? input.styleTags.join('') : input.prompt.trim();
   const normalized = normalizeTaskSummary(source);
   if (normalized) {
@@ -1661,8 +1807,8 @@ async function generateOpenAiImage(task: TaskRow): Promise<GeneratedImagePayload
   ensureOpenAiConfigured();
   const requestUrl = buildOpenAiImagesUrl(openAiBaseUrl);
   const [width, height] = parseSize(task.size);
-  const enhancedPrompt = await generateEnhancedOpenAiPrompt(task);
-  const requestVariants = buildOpenAiEditRequestVariants(task, enhancedPrompt);
+  const editPrompt = buildOpenAiEditPrompt(task);
+  const requestVariants = buildOpenAiEditRequestVariants(task, editPrompt);
 
   for (const variant of requestVariants) {
     const formData = new FormData();
@@ -1772,7 +1918,7 @@ async function generateOpenAiImage(task: TaskRow): Promise<GeneratedImagePayload
   });
 }
 
-function buildOpenAiEditRequestVariants(task: TaskRow, enhancedPrompt: string): OpenAiEditRequestVariant[] {
+function buildOpenAiEditRequestVariants(task: TaskRow, editPrompt: string): OpenAiEditRequestVariant[] {
   const personalAssets = getTaskReferenceAssetIds(task, 'personal')
     .map((assetId) => getAsset(assetId))
     .filter((asset): asset is AssetRow => Boolean(asset));
@@ -1793,7 +1939,7 @@ function buildOpenAiEditRequestVariants(task: TaskRow, enhancedPrompt: string): 
   const outputFormat = normalizeOutputFormat(task.output_format);
   const baseFields = {
     model: task.model || defaultImageModel,
-    prompt: enhancedPrompt,
+    prompt: editPrompt,
     size: normalizeOpenAiSize(task.size),
   } satisfies Record<string, string>;
 
@@ -1855,6 +2001,41 @@ function buildOpenAiEditRequestVariants(task: TaskRow, enhancedPrompt: string): 
   return variants;
 }
 
+function buildOpenAiEditPrompt(task: TaskRow) {
+  const styleReferenceCount = getTaskReferenceAssetIds(task, 'style').length;
+  const styleTags = parseStoredStyleTags(task.style_tags_json);
+  const userPrompt = task.prompt.trim();
+  const lines = [
+    'Create one premium avatar image by editing the uploaded personal reference image(s).',
+    'Preserve the real person\'s recognizable identity: facial structure, face shape, eyes, nose, mouth, hairstyle, and signature features. Do not invent a different person.',
+    'The output should be refined, warm, luminous, gallery-like, and suitable for a premium profile avatar.',
+  ];
+
+  if (styleReferenceCount === 1) {
+    lines.push(
+      'There is exactly one style reference image. Fully recreate its style, composition, scene structure, lighting, color palette, texture, and overall visual language. The main operation is face/identity replacement: keep the reference image\'s visual setup while replacing the subject identity with the uploaded personal reference identity. Never copy the identity or facial features from the style reference.'
+    );
+  } else if (styleReferenceCount > 1) {
+    lines.push(
+      'There are multiple style reference images. Treat style-reference-1 as the main image: restore its scene, composition, camera/framing, lighting direction, and spatial arrangement. Use the other style reference images only as secondary style cues for palette, texture, rendering medium, mood, and details. Preserve the personal reference identity and never copy any identity from style references.'
+    );
+  } else {
+    lines.push('No style reference image is provided. Use the written custom requirements and the premium avatar preset while preserving the personal reference identity.');
+  }
+
+  if (styleTags.length > 0) {
+    lines.push(`Style analysis tags: ${styleTags.join(' / ')}.`);
+  }
+
+  if (userPrompt) {
+    lines.push(`Highest priority user requirements: ${userPrompt}`);
+    lines.push('If any instruction conflicts, follow the user requirements above first, then the style reference prompt, then the general avatar preset.');
+  }
+
+  lines.push(`Requested output size: ${normalizeOpenAiSize(task.size)}.`);
+  return lines.join('\n\n');
+}
+
 function buildOpenAiApiUrl(baseUrl: string, endpointPath: string) {
   const url = new URL(baseUrl);
   const normalizedPath = url.pathname.replace(/\/+$/, '');
@@ -1878,105 +2059,6 @@ function buildOpenAiImagesUrl(baseUrl: string) {
 
 function buildOpenAiChatCompletionsUrl(baseUrl: string) {
   return buildOpenAiApiUrl(baseUrl, '/v1/chat/completions');
-}
-
-async function generateEnhancedOpenAiPrompt(task: TaskRow) {
-  const personalAssets = getTaskReferenceAssetIds(task, 'personal')
-    .map((assetId) => getAsset(assetId))
-    .filter((asset): asset is AssetRow => Boolean(asset));
-  if (personalAssets.length === 0) {
-    throw createOpenAiGenerationFailure({
-      status: null,
-      providerCode: null,
-      providerType: null,
-      providerMessage: 'Missing personal reference asset for prompt analysis',
-      internalCode: 'OPENAI_MISSING_REFERENCE_ASSET',
-      taskMessage: '缺少个人形象参考图，无法开始生成。',
-    });
-  }
-
-  const styleAssets = getTaskReferenceAssetIds(task, 'style')
-    .map((assetId) => getAsset(assetId))
-    .filter((asset): asset is AssetRow => Boolean(asset));
-  const response = await fetch(buildOpenAiChatCompletionsUrl(openAiBaseUrl), {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${openAiApiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: defaultPromptModel,
-      messages: [
-        {
-          role: 'system',
-          content:
-            'You improve prompts for an avatar image-edit workflow. Return only the final image-generation prompt text. Do not wrap it in JSON, markdown, quotes, or explanations. When a style reference image is provided, prioritize its medium, art style, and visual language over the photographic realism of the personal reference while preserving the first person\'s recognizable identity.',
-        },
-        {
-          role: 'user',
-          content: buildPromptAnalysisMessage(task, personalAssets, styleAssets),
-        },
-      ],
-    }),
-    signal: AbortSignal.timeout(openAiRequestTimeoutMs),
-  });
-
-  const payload = await readOpenAiChatResponse(response);
-  if (!response.ok) {
-    throw extractOpenAiFailureFromResponse(response.status, payload);
-  }
-
-  const prompt = extractPromptText(payload);
-  if (!prompt) {
-    throw createOpenAiGenerationFailure({
-      status: response.status,
-      providerCode: payload.error?.code ?? null,
-      providerType: payload.error?.type ?? null,
-      providerMessage: 'Prompt model returned empty content',
-      internalCode: 'OPENAI_INVALID_RESPONSE',
-      taskMessage: '生成服务未能构建有效提示词，请稍后重试。',
-    });
-  }
-
-  return prompt;
-}
-
-function buildPromptAnalysisMessage(task: TaskRow, personalAssets: AssetRow[], styleAssets: AssetRow[]) {
-  const styleTags = parseStoredStyleTags(task.style_tags_json);
-  const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
-    {
-      type: 'text',
-      text: [
-        'Project preset: create a single premium AI avatar portrait for a real person with a refined, elegant, warm, luminous, gallery-like result suitable for a premium profile avatar.',
-        'The uploaded personal-reference images show the same person. Preserve the real person\'s recognizable identity through facial structure, face shape, eyes, nose, mouth, hairstyle, and signature features. Transfer that identity into the target style as faithfully as possible. Do not invent a different person or change key personal traits. Do not preserve the personal images\' photographic realism, camera look, or literal photo texture unless the requested style is explicitly photographic.',
-        styleAssets.length > 0
-          ? 'The uploaded style-reference images are style-only references and have style priority. Use their medium, art style, visual language, rendering approach, palette, composition, texture, linework, and atmosphere as the primary target style. If personal references are real selfies/photos and style references are anime, 2D, illustration, watercolor, or any other non-photographic medium, transform the person into that medium instead of preserving photo realism. Never copy identity, facial features, or character design from style references.'
-          : 'No style-reference image is provided. Use only the written direction for style while preserving the personal-reference identity.',
-        `User prompt: ${task.prompt.trim() || 'None provided.'}`,
-        `Style tags: ${styleTags.length > 0 ? styleTags.join(' | ') : 'None.'}`,
-        `Personal reference image count: ${personalAssets.length}`,
-        `Style reference image count: ${styleAssets.length}`,
-        `Requested model: ${task.model || defaultImageModel}`,
-        `Requested quality: ${task.quality || defaultImageQuality}`,
-        `Requested output size: ${normalizeOpenAiSize(task.size)}`,
-        'Return only the final prompt to send to the image edits endpoint.',
-      ].join('\n\n'),
-    },
-    ...personalAssets.map((asset) => ({
-      type: 'image_url',
-      image_url: {
-        url: buildAssetDataUrl(asset),
-      },
-    })),
-    ...styleAssets.map((asset) => ({
-      type: 'image_url',
-      image_url: {
-        url: buildAssetDataUrl(asset),
-      },
-    })),
-  ];
-
-  return content;
 }
 
 function buildAssetDataUrl(asset: AssetRow) {

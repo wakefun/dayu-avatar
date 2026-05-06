@@ -1,55 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ChipGroup } from '../components/ChipGroup';
 import { ImageLightbox } from '../components/ImageLightbox';
 import { PageSection } from '../components/PageSection';
 import { UploadCard } from '../components/UploadCard';
 import { api } from '../lib/api';
-import type { Asset } from '../lib/types';
+import type { Asset, StyleReferenceAnalysis } from '../lib/types';
 import { cx, fieldLabelClass, helperTextClass, inputClass, pageStackClass, primaryButtonClass } from '../components/ui';
-
-const styleSuggestions = [
-  {
-    tag: '清透写真',
-    snippet: '清透写真风格，肤色通透自然，光线柔和干净，面部细节真实细腻，整体气质轻盈高级。',
-  },
-  {
-    tag: '高级杂志',
-    snippet: '高级杂志封面质感，构图利落克制，人物状态松弛自信，整体呈现精致时尚的 editorial 氛围。',
-  },
-  {
-    tag: '艺术肖像',
-    snippet: '艺术肖像表达，保留真实人物神态，强调层次光影与画廊级审美，画面细节细腻耐看。',
-  },
-  {
-    tag: '法式插画',
-    snippet: '法式插画气质，线条柔和优雅，色彩轻盈克制，兼具文学感与精致留白。',
-  },
-  {
-    tag: '胶片质感',
-    snippet: '胶片质感与轻微颗粒层次，色调自然复古，保留柔和高光与富有情绪的影调过渡。',
-  },
-  {
-    tag: '水彩插画',
-    snippet: '水彩插画笔触与晕染层次，颜色柔和通透，氛围梦幻，边缘表达自然细腻。',
-  },
-  {
-    tag: '自然光',
-    snippet: '自然光照明，肤感真实柔和，明暗过渡自然，画面轻透舒展，不要生硬棚拍感。',
-  },
-  {
-    tag: '极简留白',
-    snippet: '极简留白构图，主体突出，背景克制干净，视觉重心明确，整体高级安静。',
-  },
-  {
-    tag: '温柔奶油色',
-    snippet: '温柔奶油色调，色彩柔软细腻，画面温暖治愈，整体观感细致而不过分甜腻。',
-  },
-  {
-    tag: '轻奢氛围',
-    snippet: '轻奢氛围表达，质感克制高级，细节精致，色彩与材质呈现柔和而有层次的高级感。',
-  },
-] as const;
 
 const ratioOptions = [
   { value: '1:1', label: '1:1' },
@@ -98,7 +54,9 @@ export function GeneratePage() {
   const [personalAssets, setPersonalAssets] = useState<Asset[]>([]);
   const [styleAssets, setStyleAssets] = useState<Asset[]>([]);
   const [prompt, setPrompt] = useState('');
-  const [insertedStyleTags, setInsertedStyleTags] = useState<string[]>([]);
+  const [styleAnalysis, setStyleAnalysis] = useState<StyleReferenceAnalysis | null>(null);
+  const [styleAnalysisLoading, setStyleAnalysisLoading] = useState(false);
+  const [styleAnalysisError, setStyleAnalysisError] = useState<string | null>(null);
   const [ratio, setRatio] = useState<RatioValue>('1:1');
   const [resolution, setResolution] = useState<ResolutionValue>('2k');
   const [quantity, setQuantity] = useState<QuantityValue>('1');
@@ -113,7 +71,6 @@ export function GeneratePage() {
     }
 
     setPrompt(state.prompt ?? '');
-    setInsertedStyleTags(state.styleTags ?? []);
     setPersonalAssets((state.personalReferenceAssets ?? []).slice(0, 3));
     setStyleAssets((state.styleReferenceAssets ?? []).slice(0, 3));
     setQuantity(toQuantityValue(state.quantity));
@@ -123,15 +80,43 @@ export function GeneratePage() {
     navigate('.', { replace: true, state: null });
   }, [location.state, navigate]);
 
-  const handleInsertSuggestion = (tag: string) => {
-    const suggestion = styleSuggestions.find((item) => item.tag === tag);
-    if (!suggestion) {
+  useEffect(() => {
+    if (styleAssets.length === 0) {
+      setStyleAnalysis(null);
+      setStyleAnalysisError(null);
+      setStyleAnalysisLoading(false);
       return;
     }
 
-    setInsertedStyleTags((current) => (current.includes(tag) ? current : [...current, tag]));
-    setPrompt((currentPrompt) => appendPromptSnippet(currentPrompt, suggestion.snippet));
-  };
+    const assetIds = styleAssets.map((asset) => asset.id);
+    let canceled = false;
+    setStyleAnalysisLoading(true);
+    setStyleAnalysis(null);
+    setStyleAnalysisError(null);
+
+    api
+      .analyzeStyleReferences(assetIds)
+      .then((response) => {
+        if (!canceled) {
+          setStyleAnalysis(response.analysis);
+        }
+      })
+      .catch((requestError) => {
+        if (!canceled) {
+          setStyleAnalysis(null);
+          setStyleAnalysisError(requestError instanceof Error ? requestError.message : '风格分析失败');
+        }
+      })
+      .finally(() => {
+        if (!canceled) {
+          setStyleAnalysisLoading(false);
+        }
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [styleAssets]);
 
   const handleUpload = async (file: File, category: 'personal_reference' | 'style_reference') => {
     try {
@@ -173,21 +158,34 @@ export function GeneratePage() {
           onRemove={(assetId) => setStyleAssets((current) => current.filter((asset) => asset.id !== assetId))}
           onPreview={setPreviewAsset}
         />
+        {styleAnalysisLoading ? <p className={helperTextClass}>正在分析参考图风格...</p> : null}
+        {styleAnalysis ? (
+          <div className="grid gap-3 rounded-[24px] border border-[#cfa983]/24 bg-white/64 p-4 shadow-[0_16px_34px_rgba(86,67,54,0.08)]">
+            <div className="flex flex-wrap gap-2">
+              {styleAnalysis.tags.map((tag) => (
+                <span key={tag} className="rounded-full border border-[#cfa983]/28 bg-[#fff8f2] px-3 py-1 text-xs text-[#7a5b43]">
+                  {tag}
+                </span>
+              ))}
+            </div>
+            <p className="text-sm leading-6 text-[#4d403a]">{styleAnalysis.description}</p>
+          </div>
+        ) : null}
+        {styleAnalysisError ? <p className="text-sm text-[#b36f67]">{styleAnalysisError}</p> : null}
       </PageSection>
 
-      <PageSection title="描述你想要的头像风格" subtitle="每次点击灵感标签，都会把一段更完整的风格描述补充到提示词中。">
+      <PageSection title="个性化定制" subtitle="补充你想强调的人物气质、场景、光线、色调或构图要求。">
         <label className={fieldLabelClass}>
-          <span>头像风格描述</span>
+          <span>补充需求</span>
           <textarea
             className={`${inputClass} min-h-[150px] resize-y`}
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
             rows={6}
-            placeholder="例如：清透苹果系艺术头像，自然光，人物神态松弛，画面高级通透，适合社交媒体头像。"
+            placeholder="例如：希望更松弛自然，保留微笑，背景干净，整体适合社交媒体头像。"
           />
         </label>
-        <ChipGroup tags={styleSuggestions.map((item) => item.tag)} onSelect={handleInsertSuggestion} />
-        <p className={helperTextClass}>你可以自由补充人物气质、光线、色调、构图或想要突出的情绪表达。</p>
+        <p className={helperTextClass}>这部分会作为最高优先级需求参与生成；不填写也可以直接使用参考图风格。</p>
       </PageSection>
 
       <PageSection title="生成设置" subtitle="选择更接近 Stitch 的生成偏好，数量大于 1 时会并发创建多条任务，而不是在一次请求中批量返回多图。">
@@ -201,7 +199,7 @@ export function GeneratePage() {
         <button
           type="button"
           className={cx(primaryButtonClass, 'mt-4')}
-          disabled={personalAssets.length === 0 || submitting}
+          disabled={personalAssets.length === 0 || submitting || styleAnalysisLoading}
           onClick={async () => {
             if (personalAssets.length === 0) {
               setError('请先上传个人形象参考图');
@@ -213,7 +211,8 @@ export function GeneratePage() {
               setError(null);
               const response = await api.createTask({
                 prompt,
-                styleTags: insertedStyleTags,
+                styleTags: styleAnalysis?.tags ?? [],
+                styleReferenceAnalysis: styleAnalysis,
                 personalReferenceAssetIds: personalAssets.map((asset) => asset.id),
                 styleReferenceAssetIds: styleAssets.map((asset) => asset.id),
                 quantity: Number(quantity),
@@ -236,7 +235,7 @@ export function GeneratePage() {
             }
           }}
         >
-          {submitting ? '正在创建任务...' : '开始生成'}
+          {styleAnalysisLoading ? '正在分析风格...' : submitting ? '正在创建任务...' : '开始生成'}
         </button>
         <p className={`mt-3 ${helperTextClass}`}>预计 30-60 秒完成，可在任务队列中查看进度。</p>
       </PageSection>
@@ -271,17 +270,6 @@ function SegmentedControl<T extends string>({ label, options, value, onChange }:
       </div>
     </div>
   );
-}
-
-function appendPromptSnippet(prompt: string, snippet: string) {
-  const normalizedPrompt = prompt.trim();
-  if (normalizedPrompt.includes(snippet)) {
-    return prompt;
-  }
-  if (!normalizedPrompt) {
-    return snippet;
-  }
-  return `${normalizedPrompt}\n\n${snippet}`;
 }
 
 function normalizeImageSize(ratio: RatioValue, resolution: ResolutionValue) {

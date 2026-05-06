@@ -113,7 +113,7 @@ Required OpenAI-compatible env keys when `GENERATION_MODE=openai`:
 OPENAI_BASE_URL
 OPENAI_API_KEY
 OPENAI_IMAGE_MODEL                  # defaults to gpt-image-2
-OPENAI_PROMPT_MODEL                 # defaults to gpt-5.5; used to analyze reference images and build final image-edit prompt
+OPENAI_PROMPT_MODEL                 # defaults to gpt-5.5; used for style-reference analysis and task-title generation
 OPENAI_IMAGE_QUALITY                # defaults to high
 OPENAI_REQUEST_TIMEOUT_MS           # optional, defaults to 600000ms; invalid or non-positive values fall back safely
 ```
@@ -129,10 +129,12 @@ OPENAI_REQUEST_TIMEOUT_MS           # optional, defaults to 600000ms; invalid or
 - Verify `id_token` signature with provider JWKS before trusting claims.
 - Supported ID token signing algorithms: `RS256`, `ES256`, `ES384`.
 - Validate issuer, audience, authorized party (`azp`) for multi-audience tokens, expiration, issued-at, nonce, and non-empty `sub`.
-- When style reference exists, prompt analysis and the final edit prompt must prioritize the style reference medium and visual language over the personal photo's realism while preserving recognizable identity from the first image only.
+- When style reference exists, the image-edit prompt is built locally from preset branches: one style reference means recreate that reference and mainly replace the face/identity; multiple style references means style-reference-1 is the main scene and later references are secondary style cues.
+- `POST /api/style-reference-analysis` accepts `{ assetIds: string[] }` for 1-3 user-owned `style_reference` assets and returns `{ analysis: { tags: string[], description: string } }`.
+- Style-reference analysis uses `/v1/chat/completions` with `OPENAI_PROMPT_MODEL`, sends style-reference images only, and must keep output concise enough for direct page display.
+- Task title generation uses `/v1/chat/completions` with `OPENAI_PROMPT_MODEL` and includes user requirements plus style-reference analysis context.
 - Do not persist access tokens. Keep `id_token` server-side only for optional provider logout.
-- OpenAI-compatible generation calls `/v1/chat/completions` with `OPENAI_PROMPT_MODEL` before `/v1/images/edits`; the prompt model receives text plus 1-3 personal reference images and 0-3 optional style reference images, and must return only the final image-edit prompt.
-- OpenAI-compatible generation calls `/v1/images/edits` with multipart reference image inputs, accepts either `b64_json` or `url`, writes the image to local generated storage, and exposes it through `/static/generated/...`.
+- OpenAI-compatible generation builds the final image-edit prompt locally, then calls `/v1/images/edits` with multipart reference image inputs, accepts either `b64_json` or `url`, writes the image to local generated storage, and exposes it through `/static/generated/...`.
 - `POST /api/generation-tasks` accepts either legacy single-id fields or normalized array fields, but API responses must always expose summary plus array-based reference data.
 - `GET /api/queue` items include `summary` for every task; frontend should not infer a card title from raw prompt text.
 - `GET /api/history` items include `prompt`, `styleTags`, `personalReferenceAssets`, `styleReferenceAssets`, and `generationParams` so the frontend can navigate home with a prefilled draft instead of creating an immediate retry task.
@@ -151,7 +153,10 @@ OPENAI_REQUEST_TIMEOUT_MS           # optional, defaults to 600000ms; invalid or
 | Callback state mismatch | Reject callback and redirect with safe auth error |
 | ID token signature invalid | Reject callback and redirect with safe auth error |
 | ID token issuer/audience/azp/exp/iat/nonce/sub invalid | Reject callback and redirect with safe auth error |
-| Missing personal reference asset for prompt analysis or OpenAI edit | Mark task `failed` with `GENERATION_FAILED` and safe message |
+| Style analysis `assetIds` empty | Return `400 VALIDATION_ERROR` |
+| Style analysis asset id is not owned by current user or is not `style_reference` | Return `400 VALIDATION_ERROR` |
+| Style analysis model response malformed or unavailable | Return concise fallback analysis; do not block upload flow |
+| Missing personal reference asset for OpenAI edit | Mark task `failed` with `GENERATION_FAILED` and safe message |
 | `personalReferenceAssetIds` empty after normalization | Return `400 VALIDATION_ERROR` |
 | Any personal reference asset id is not owned by the current user or is wrong category | Return `400 VALIDATION_ERROR` |
 | Any style reference asset id is not owned by the current user or is wrong category | Return `400 VALIDATION_ERROR` |
@@ -170,12 +175,13 @@ OPENAI_REQUEST_TIMEOUT_MS           # optional, defaults to 600000ms; invalid or
 
 - Good: provider callback verifies JWKS signature and claims before `users` / `auth_accounts` upsert.
 - Good: quantity `4` creates four generation tasks and starts four runs; each task still owns exactly one `generation_results` row.
-- Good: prompt-model analysis labels all uploaded personal references as the same identity source and all uploaded style references as style-only guidance before image edits.
+- Good: style-reference analysis returns short display-ready tags/description and falls back to concise defaults if the prompt model response is unusable.
+- Good: image generation never asks a chat model to rewrite the final image prompt; branch locally by style-reference count and mark user requirements as highest priority.
 - Good: queue/history responses return explicit summary and array-based reference assets so the frontend can render cards and prefill drafts without extra round trips.
 - Good: avatar updates only accept gallery items already owned by the current user.
 - Base: mock mode remains available and is used for local smoke tests.
 - Bad: do not decode `id_token` payload and trust it without signature and claim validation.
-- Bad: do not send `n` to OpenAI image APIs for multiple outputs; create concurrent tasks instead.
+- Bad: do not call `/v1/chat/completions` during image generation to construct or rewrite the final image-edit prompt; use the local preset builder instead.
 - Bad: do not log `OPENAI_API_KEY`, `id_token`, provider responses, or downloaded image URLs with secrets.
 - Bad: do not send user-controlled upload filenames to the provider prompt or multipart filename fields.
 - Bad: do not make history “再次生成” call `/api/generation-tasks/:taskId/retry` when the intended UX is to return to home with editable prefilled inputs.
@@ -184,7 +190,8 @@ OPENAI_REQUEST_TIMEOUT_MS           # optional, defaults to 600000ms; invalid or
 
 - Always run `pnpm typecheck`, `pnpm lint`, and `pnpm build`.
 - Run mock-mode smoke after auth/generation changes: health, mock login, `/api/auth/me`, queue/history, logout, and at least one task completion when practical.
-- Add assertions that queue items expose `summary`, history items expose prefill-ready prompt/style/reference fields, gallery items expose width/height, and avatar updates return the refreshed user payload.
+- Add assertions for `POST /api/style-reference-analysis`: empty ids, wrong ownership/category, fallback analysis when prompt model is unavailable, and concise successful `{ tags, description }` shape.
+- Add assertions that OpenAI image generation uses the local prompt branch for 0/1/multiple style references and includes highest-priority user requirements when prompt text exists.
 - Real OIDC/OpenAI end-to-end verification requires external credentials and should be done manually in the deployment environment without printing secrets.
 
 ### 7. Wrong vs Correct
@@ -220,8 +227,17 @@ formData.append('prompt', buildGenerationPrompt(task, hasStyleReference));
 #### Wrong
 
 ```ts
-onRetry={(taskId) => api.retryTask(taskId)}
+const enhancedPrompt = await generateEnhancedOpenAiPrompt(task);
+formData.append('prompt', enhancedPrompt);
 ```
+
+#### Correct
+
+```ts
+const prompt = buildOpenAiEditPrompt(task);
+formData.append('prompt', prompt);
+```
+
 
 #### Correct
 

@@ -34,12 +34,22 @@ export type GenerationTask = {
 };
 ```
 
-- Task creation payload:
+- Style-reference analysis contract:
 
 ```ts
+export type StyleReferenceAnalysis = {
+  tags: string[];
+  description: string;
+};
+
+api.analyzeStyleReferences(assetIds: string[]): Promise<{ analysis: StyleReferenceAnalysis }>;
+```
+
+
 api.createTask({
   prompt,
   styleTags,
+  styleReferenceAnalysis,
   personalReferenceAssetIds,
   styleReferenceAssetIds,
   quantity,
@@ -50,6 +60,8 @@ api.createTask({
 ### 3. Contracts
 
 - Frontend sends array-based reference ids to `POST /api/generation-tasks`; it must not send only the legacy single-id fields.
+- Frontend requests style-reference analysis through `api.analyzeStyleReferences(assetIds)` whenever uploaded style references change, then sends the returned `StyleReferenceAnalysis` to task creation.
+- Frontend treats `StyleReferenceAnalysis.tags` as display/title context only; it must not auto-insert those tags or generated snippets into the custom prompt textarea.
 - Frontend reads `promptSummary`/`summary` from API payloads instead of truncating raw prompts locally for cards.
 - History items must carry `prompt`, `styleTags`, `personalReferenceAssets`, `styleReferenceAssets`, and `generationParams` so navigation state can prefill the generation page.
 - Result routes must fetch task status before fetching `/result`; queued/processing tasks redirect to loading, and failed/canceled tasks show terminal copy instead of claiming a result is ready.
@@ -58,7 +70,7 @@ api.createTask({
 
 ### 4. Validation & Error Matrix
 
-- Missing `prompt`/`styleTags`/reference arrays in history prefill state -> home page falls back to safe defaults and does not crash.
+- Style-reference analysis request fails -> page keeps typed prompt/upload state and displays a fallback error instead of inventing local analysis.
 - Missing `width`/`height` on images -> UI still renders, but without aspect-ratio overrides.
 - Backend returns only legacy single-id fields for old data -> frontend should rely on array fields already normalized by the API and avoid reconstructing arrays itself.
 - Result route opened for a queued or processing task -> redirect to `/generate/loading/:taskId` before requesting the result endpoint.
@@ -67,7 +79,7 @@ api.createTask({
 
 ### 5. Good/Base/Bad Cases
 
-- Good: `HistoryPage` navigates with a structured state object containing prompt, tags, assets, and generation params.
+- Good: `GeneratePage` stores `StyleReferenceAnalysis | null`, clears stale analysis while loading, and passes the exact object into `api.createTask`.
 - Good: `GalleryPage` uses server-provided image dimensions rather than hard-coded portrait ratios.
 - Base: image preview components accept nullable dimensions and degrade to CSS defaults when missing.
 - Bad: building queue/history summary text from raw prompt in the component layer.
@@ -76,7 +88,7 @@ api.createTask({
 ### 6. Tests Required
 
 - `pnpm typecheck` must fail if backend/frontend task contracts drift.
-- Add assertions that history prefill state round-trips back into the home page controls.
+- Add assertions that style-reference upload/remove refreshes `StyleReferenceAnalysis`, and task creation includes the latest analysis object plus array-based asset ids.
 - Add assertions that gallery/result/reference images still render when width/height are null.
 - Add assertions that avatar updates refresh `user.avatarUrl` from the API response.
 
@@ -97,6 +109,7 @@ api.createTask({
 api.createTask({
   personalReferenceAssetIds: personalAssets.map((asset) => asset.id),
   styleReferenceAssetIds: styleAssets.map((asset) => asset.id),
+  styleReferenceAnalysis,
 });
 ```
 

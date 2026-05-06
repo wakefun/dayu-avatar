@@ -7,6 +7,7 @@ import type {
   HistoryItem,
   QueueItem,
   SessionSummary,
+  StyleReferenceAnalysis,
   User,
 } from './types';
 
@@ -66,6 +67,7 @@ export const api = {
   createTask: (body: {
     prompt: string;
     styleTags: string[];
+    styleReferenceAnalysis: StyleReferenceAnalysis | null;
     personalReferenceAssetIds: string[];
     styleReferenceAssetIds: string[];
     quantity: number;
@@ -76,6 +78,8 @@ export const api = {
       outputFormat: string;
     };
   }) => request<CreateGenerationTaskResponse>('/api/generation-tasks', { method: 'POST', body: JSON.stringify(body) }),
+  analyzeStyleReferences: (assetIds: string[]) =>
+    request<{ analysis: StyleReferenceAnalysis }>('/api/style-reference-analysis', { method: 'POST', body: JSON.stringify({ assetIds }) }),
   getTask: (taskId: string) => request<{ task: GenerationTask }>(`/api/generation-tasks/${taskId}`),
   streamTask: (taskId: string) => new EventSource(`/api/generation-tasks/${encodeURIComponent(taskId)}/events`),
   getTaskProgress: (taskId: string) =>
