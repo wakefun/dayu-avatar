@@ -23,9 +23,9 @@ export function QueueCard({ item, onOpen, onRetry }: QueueCardProps) {
 
   return (
     <article className={cx(softCardClass, 'grid gap-3')}>
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-2.5">
         <strong className={statusPillClass(item.status)}>{statusLabel(item.status)}</strong>
-        <span className="text-xs text-[#6b5f59]">{new Date(item.createdAt).toLocaleString()}</span>
+        <span className="shrink-0 text-right text-xs leading-5 text-[#6b5f59]">{new Date(item.createdAt).toLocaleString()}</span>
       </div>
       <p className="m-0 text-[15px] font-semibold text-[#2f2724]">{item.summary}</p>
       <small className="text-sm leading-6 text-[#6b5f59]">{statusMessage}</small>
@@ -54,11 +54,11 @@ export function QueueCard({ item, onOpen, onRetry }: QueueCardProps) {
 export function HistoryCard({ item, onRegenerate, onPreview }: HistoryCardProps) {
   return (
     <article className={cx(softCardClass, 'grid gap-3')}>
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-2.5">
         <strong className={statusPillClass(item.status)}>{statusLabel(item.status)}</strong>
-        <span className="text-xs text-[#6b5f59]">{new Date(item.createdAt).toLocaleString()}</span>
+        <span className="shrink-0 text-right text-xs leading-5 text-[#6b5f59]">{new Date(item.createdAt).toLocaleString()}</span>
       </div>
-      <div className="mt-1 grid grid-cols-[86px_1fr] items-center gap-3">
+      <div className={cx('mt-1 grid items-center gap-3', item.resultImageUrl ? 'grid-cols-[86px_1fr]' : 'grid-cols-1')}>
         {item.resultImageUrl ? (
           <button
             type="button"

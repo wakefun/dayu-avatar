@@ -66,7 +66,7 @@ export function UploadCard({ title, description, actionLabel, iconLabel, values,
               </button>
               <button
                 type="button"
-                className="absolute top-2 right-2 grid h-[30px] w-[30px] place-items-center rounded-full bg-white/88 text-base font-bold text-[#2f2724] shadow-sm"
+                className="absolute top-1 right-1 grid h-11 w-11 place-items-center rounded-full bg-white/88 text-base font-bold text-[#2f2724] shadow-sm"
                 onClick={() => onRemove(asset.id)}
                 aria-label="移除图片"
               >

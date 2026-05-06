@@ -78,7 +78,7 @@ export function AppShell({ title, user, drawerOpen, installAvailable, onOpenDraw
       <aside
         className={cx(
           glassPanelClass,
-          'fixed inset-y-4 left-4 z-30 w-[min(78vw,320px)] p-[18px] transition-transform duration-200',
+          'fixed left-4 top-[max(16px,env(safe-area-inset-top))] bottom-[max(16px,env(safe-area-inset-bottom))] z-30 w-[min(78vw,320px)] overflow-y-auto p-[18px] transition-transform duration-200',
           drawerOpen ? 'translate-x-0' : '-translate-x-[120%]'
         )}
         aria-hidden={!drawerOpen}

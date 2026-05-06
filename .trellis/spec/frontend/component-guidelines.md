@@ -116,6 +116,7 @@ import {
 ### 6. Tests Required
 
 - Browser smoke test should verify login, drawer navigation, generation controls, upload controls, automatic style-reference analysis display, queue/history/gallery/settings pages, and save-to-gallery flow.
+- Mobile UI smoke checks should use a real mobile viewport or CDP device metrics and assert `document.documentElement.scrollWidth <= window.innerWidth` for login/shell pages; plain headless screenshots with only `--window-size` can show misleading desktop-style clipping.
 - `pnpm --filter @dayu/web lint`, `pnpm --filter @dayu/web typecheck`, and `pnpm --filter @dayu/web build` must pass after styling changes.
 - For future automated UI tests, assert buttons are reachable by text and do not cause double navigation/action.
 - For style-reference analysis, assert upload/remove changes trigger fresh analysis, clear stale results while loading, and disable submit until analysis settles.

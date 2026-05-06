@@ -52,11 +52,11 @@ export function ImageLightbox({ image, actions = [], onClose }: ImageLightboxPro
       aria-label={image.alt}
       onClick={onClose}
     >
-      <div className="relative grid max-h-full w-full max-w-[430px] gap-3" onClick={(event) => event.stopPropagation()}>
+      <div className="relative grid max-h-full w-full max-w-[430px] gap-3 overflow-y-auto" onClick={(event) => event.stopPropagation()}>
         <button
           ref={closeButtonRef}
           type="button"
-          className="absolute top-2.5 right-2.5 z-10 grid h-10 w-10 place-items-center rounded-full bg-white/90 text-2xl text-[#2f2724]"
+          className="absolute top-2.5 right-2.5 z-10 grid h-11 w-11 place-items-center rounded-full bg-white/90 text-2xl text-[#2f2724]"
           onClick={onClose}
           aria-label="关闭预览"
         >
@@ -65,7 +65,10 @@ export function ImageLightbox({ image, actions = [], onClose }: ImageLightboxPro
         <img
           src={image.src}
           alt={image.alt}
-          className="block max-h-[76vh] w-full rounded-[24px] bg-white/20 object-contain"
+          className={cx(
+            'block w-full rounded-[24px] bg-white/20 object-contain',
+            image.meta || actions.length > 0 ? 'max-h-[68vh]' : 'max-h-[76vh]'
+          )}
           style={image.width && image.height ? { aspectRatio: `${image.width} / ${image.height}` } : undefined}
         />
         {image.meta || actions.length > 0 ? (

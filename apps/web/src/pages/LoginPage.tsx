@@ -16,8 +16,8 @@ export function LoginPage() {
   }, [searchParams]);
 
   return (
-    <div className="grid min-h-screen place-items-center px-6">
-      <div className={cx(glassPanelClass, 'grid w-full max-w-[430px] gap-[18px] p-7')}>
+    <div className="grid min-h-[100svh] place-items-center overflow-x-hidden px-4 pt-[max(24px,env(safe-area-inset-top))] pb-[max(24px,env(safe-area-inset-bottom))]">
+      <div className={cx(glassPanelClass, 'grid w-full max-w-[358px] gap-[18px] p-6')}>
         <div className="text-center text-[13px] tracking-[0.02em] text-[#8a7c74]">Dayu Avatar</div>
         <h1 className="m-0 text-center font-serif text-[34px] font-semibold text-[#2f2724]">大宇头像</h1>
         <p className="m-0 text-center text-[15px] leading-7 text-[#6b5f59]">
