@@ -1,0 +1,24 @@
+services:
+  dayu-avatar:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dayu-avatar:local
+    env_file:
+      - .env
+    environment:
+      PORT: ${PORT:-3001}
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3001}
+      AUTH_MODE: ${AUTH_MODE:-mock}
+      GENERATION_MODE: ${GENERATION_MODE:-mock}
+    ports:
+      - "${PORT:-3001}:3001"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

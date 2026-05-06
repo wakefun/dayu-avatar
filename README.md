@@ -117,6 +117,80 @@ This runs:
 
 Vite proxies `/api` and `/static` requests to the API during local development.
 
+## Docker Compose deployment from a local image
+
+The repository includes a production-oriented single-container example. The Docker image is built locally from this checkout, builds both workspace apps, runs the Express API, serves the Vite `dist` output from the same origin, and keeps `/api` plus `/static/uploads` and `/static/generated` on the same host.
+
+### First-run environment setup
+
+Create a runtime env file from the example and edit secrets before starting:
+
+```bash
+cp .env.example .env
+```
+
+For the default mock deployment, keep:
+
+```text
+PORT=3001
+WEB_ORIGIN=http://localhost:3001
+AUTH_MODE=mock
+GENERATION_MODE=mock
+```
+
+Set `SESSION_SECRET` to a long random value. The Compose example loads `.env`, publishes `${PORT:-3001}` on the host, and mounts repo-local `./data` to `/app/data` so SQLite, uploads, and generated files survive container recreation.
+
+For OIDC/OpenAI production-like deployment:
+- set `AUTH_MODE=oidc` and configure `OIDC_DISCOVERY_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_REDIRECT_URI`, and optional `OIDC_POST_LOGOUT_REDIRECT_URI`
+- set `GENERATION_MODE=openai` and configure `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `OPENAI_IMAGE_MODEL`, `OPENAI_PROMPT_MODEL`, `OPENAI_IMAGE_QUALITY`, and `OPENAI_REQUEST_TIMEOUT_MS`
+- make `WEB_ORIGIN`, `OIDC_REDIRECT_URI`, and `OIDC_POST_LOGOUT_REDIRECT_URI` match the externally reachable origin, including scheme, host, and port
+- keep secrets out of git; `.env` is local runtime configuration
+
+### Build and start
+
+```bash
+docker compose -f docker-compose.example.yaml build
+docker compose -f docker-compose.example.yaml up -d
+```
+
+Open `http://localhost:3001` when using the default `PORT=3001`.
+
+### Health, logs, stop, and restart
+
+
+```bash
+curl http://localhost:3001/api/health
+docker compose -f docker-compose.example.yaml logs -f dayu-avatar
+docker compose -f docker-compose.example.yaml ps
+docker compose -f docker-compose.example.yaml down
+```
+
+Use `docker compose -f docker-compose.example.yaml restart dayu-avatar` after changing only `.env` values. Rebuild when source code or dependencies change.
+
+### Update and rebuild
+
+After pulling or editing code:
+
+```bash
+docker compose -f docker-compose.example.yaml build --no-cache
+docker compose -f docker-compose.example.yaml up -d
+```
+
+### Data backup
+
+Runtime data lives in `./data` on the host:
+
+- `data/app.db` for SQLite state
+- `data/uploads/` for uploaded references
+- `data/generated/` for generated images
+
+Back up the whole `data/` directory while the container is stopped, or ensure the database files are captured consistently:
+
+```bash
+docker compose -f docker-compose.example.yaml down
+tar -czf dayu-avatar-data-backup.tgz data
+```
+
 ## Verification commands
 
 Run from the repository root:

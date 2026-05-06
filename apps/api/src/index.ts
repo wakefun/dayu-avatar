@@ -201,6 +201,8 @@ loadEnvFile(path.join(repoRoot, '.env'));
 const dataRoot = path.join(repoRoot, 'data');
 const uploadsRoot = path.join(dataRoot, 'uploads');
 const generatedRoot = path.join(dataRoot, 'generated');
+const webDistRoot = path.join(repoRoot, 'apps/web/dist');
+const webIndexPath = path.join(webDistRoot, 'index.html');
 const dbPath = path.join(dataRoot, 'app.db');
 const port = parsePort(process.env.PORT, 3001);
 const webOrigin = process.env.WEB_ORIGIN ?? 'http://localhost:5173';
@@ -329,6 +331,9 @@ app.use(
 );
 app.use('/static/uploads', express.static(uploadsRoot, { setHeaders: setPrivateMediaHeaders }));
 app.use('/static/generated', express.static(generatedRoot, { setHeaders: setPrivateMediaHeaders }));
+if (fs.existsSync(webIndexPath)) {
+  app.use(express.static(webDistRoot, { index: false }));
+}
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true });
@@ -1045,6 +1050,24 @@ app.get('/api/gallery-items/:itemId/download', requireAuth, (req, res) => {
   const absolutePath = path.join(dataRoot, row.storage_path);
   res.type(row.mime_type);
   res.download(absolutePath, row.file_name);
+});
+
+app.get(/^(?!\/api(?:\/|$)|\/static(?:\/|$)).*/, (req, res, next) => {
+  if (!fs.existsSync(webIndexPath)) {
+    next();
+    return;
+  }
+
+  if (!req.accepts('html')) {
+    next();
+    return;
+  }
+
+  res.sendFile(webIndexPath, (err) => {
+    if (err) {
+      next(err);
+    }
+  });
 });
 
 app.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
