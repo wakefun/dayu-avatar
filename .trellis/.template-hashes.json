@@ -1,12 +1,12 @@
 {
   "__version": 2,
   "hashes": {
-    "AGENTS.md": "45189289e2af6d42f8e3b748def05f29b180f055eb1d4a4a17ade2ab5c949435",
+    "AGENTS.md": "e00bbed329e0fc9a4931d3fb8a3c7b47c7311a7b5a39f38dcfb44f2c63fbd390",
     ".trellis/config.yaml": "c3c4af7d82c09a1638f63c1f560119507735b060a4780ef7e6d0cdef447c215d",
     ".trellis/scripts/__init__.py": "1242be5b972094c2e141aecbe81a4efd478f6534e3d5e28306374e6a18fcf46c",
     ".trellis/scripts/add_session.py": "a97a6c88ff7def8045a5dffa5c698a823392d7f73c1641e8a0c08db0168bd913",
     ".trellis/scripts/common/__init__.py": "3d5e9347141f0296319a5beb29d69ae714c5a474b9078caeb3edd7c5f6562e22",
-    ".trellis/scripts/common/active_task.py": "1abef342be23b739190a95ba4c55fbb439371fbed1643ed163fe8522776313d5",
+    ".trellis/scripts/common/active_task.py": "6c88ed40ef7289bca0f6d2ecba0f8b8aef46cd58788080fbeeea88de138a431f",
     ".trellis/scripts/common/cli_adapter.py": "cd844d1e84b1a09b373b3a7609e4d5606ee9d4825154c002cc9bb3f54c8e2fb9",
     ".trellis/scripts/common/config.py": "671a3591f97b75ec19f25814d2ee3f7e9b38e048f6f67442519fe0715c454eeb",
     ".trellis/scripts/common/developer.py": "f5f833123abe68890171b4da825a324216d24913f6b5ad9245afc556424ffd7b",
@@ -29,7 +29,7 @@
     ".trellis/scripts/hooks/linear_sync.py": "e09cc4ce4699aada908808718698f33f705a3edf55c4dcf8f777ad892f80ca79",
     ".trellis/scripts/init_developer.py": "f9e6c0d882406e81c8cd6b1c5abb204b0befc0069ff89cf650cd536a80f8c60e",
     ".trellis/scripts/task.py": "a07b33b519037aadabce00ea1a3d2bd309bcca881244d43c72fb50e51322e9ab",
-    ".trellis/workflow.md": "f7c60117e2424dc3d3bf0e70b331f72aecf2e94a04a7f22ec131faf6087d493a",
+    ".trellis/workflow.md": "e02d67ba62f2db4af402ce270abfa878831b5a0d4ab646b8af82d2c7e9492bd8",
     ".claude/agents/trellis-check.md": "bfef8b996ae19a23fc8a71b63cd0e5d1cbc9f37fb6e879c2cbb3724448872e70",
     ".claude/agents/trellis-implement.md": "f2e9f4cf54a3a2a554688b88627dcb946610c92ea9d9af6cf0bab64d132f3b8e",
     ".claude/agents/trellis-research.md": "f82244b2a88a1f77b09813f58a7fdf506f8e9603a5c34b3abe6e170f73ab68a8",
