@@ -24,11 +24,6 @@ export type Asset = {
   createdAt: string;
 };
 
-export type StyleReferenceAnalysis = {
-  tags: string[];
-  description: string;
-};
-
 export type GenerationTask = {
   id: string;
   status: 'queued' | 'processing' | 'completed' | 'failed' | 'canceled';

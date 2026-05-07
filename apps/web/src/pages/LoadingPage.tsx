@@ -5,7 +5,7 @@ import { api } from '../lib/api';
 import type { TaskStreamPayload } from '../lib/types';
 import { cx, pageStackClass, primaryButtonClass, secondaryButtonClass } from '../components/ui';
 
-const steps = ['分析个人形象', '提取风格氛围', '生成头像构图', '高清细化中'];
+const steps = ['理解创作需求', '规划生图提示词', '生成暗房作品', '高清细化中'];
 
 export function LoadingPage() {
   const { taskId = '' } = useParams();
@@ -94,7 +94,7 @@ export function LoadingPage() {
         </PageSection>
       ) : (
         <>
-          <PageSection title="正在生成头像" subtitle="当前任务仍在处理中，你可以稍后前往我的记录查看最新进度。">
+          <PageSection title="正在生成作品" subtitle="当前任务仍在处理中，你可以稍后前往我的记录查看最新进度。">
             <div className="grid justify-items-center gap-3 text-center">
               <div className="aspect-square w-[120px] rounded-full bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.92),rgba(222,230,249,0.82)_45%,rgba(244,213,191,0.78)_80%)] shadow-[inset_0_0_30px_rgba(255,255,255,0.68),0_20px_36px_rgba(203,178,160,0.28)]" />
               <strong className="text-[15px] text-[#2f2724]">{task?.progress.step ?? '排队中'}</strong>

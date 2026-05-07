@@ -4,13 +4,18 @@ import { ImageLightbox } from '../components/ImageLightbox';
 import { PageSection } from '../components/PageSection';
 import { UploadCard } from '../components/UploadCard';
 import { api } from '../lib/api';
-import type { Asset, StyleReferenceAnalysis } from '../lib/types';
+import type { Asset } from '../lib/types';
 import { cx, fieldLabelClass, helperTextClass, inputClass, pageStackClass, primaryButtonClass } from '../components/ui';
 
 const ratioOptions = [
+  { value: 'auto', label: '自动' },
   { value: '1:1', label: '1:1' },
   { value: '3:4', label: '3:4' },
+  { value: '4:3', label: '4:3' },
   { value: '9:16', label: '9:16' },
+  { value: '16:9', label: '16:9' },
+  { value: '21:9', label: '21:9' },
+  { value: '9:21', label: '9:21' },
 ] as const;
 
 const resolutionOptions = [
@@ -27,8 +32,19 @@ const quantityOptions = [
 ] as const;
 
 type RatioValue = (typeof ratioOptions)[number]['value'];
+type ExplicitRatioValue = Exclude<RatioValue, 'auto'>;
 type ResolutionValue = (typeof resolutionOptions)[number]['value'];
 type QuantityValue = (typeof quantityOptions)[number]['value'];
+
+const explicitRatioOptions: Array<{ value: ExplicitRatioValue; aspectRatio: number }> = [
+  { value: '1:1', aspectRatio: 1 },
+  { value: '3:4', aspectRatio: 3 / 4 },
+  { value: '4:3', aspectRatio: 4 / 3 },
+  { value: '9:16', aspectRatio: 9 / 16 },
+  { value: '16:9', aspectRatio: 16 / 9 },
+  { value: '21:9', aspectRatio: 21 / 9 },
+  { value: '9:21', aspectRatio: 9 / 21 },
+];
 
 type GeneratePrefillState = {
   prompt?: string;
@@ -54,10 +70,7 @@ export function GeneratePage() {
   const [personalAssets, setPersonalAssets] = useState<Asset[]>([]);
   const [styleAssets, setStyleAssets] = useState<Asset[]>([]);
   const [prompt, setPrompt] = useState('');
-  const [styleAnalysis, setStyleAnalysis] = useState<StyleReferenceAnalysis | null>(null);
-  const [styleAnalysisLoading, setStyleAnalysisLoading] = useState(false);
-  const [styleAnalysisError, setStyleAnalysisError] = useState<string | null>(null);
-  const [ratio, setRatio] = useState<RatioValue>('1:1');
+  const [ratio, setRatio] = useState<RatioValue>('auto');
   const [resolution, setResolution] = useState<ResolutionValue>('2k');
   const [quantity, setQuantity] = useState<QuantityValue>('1');
   const [submitting, setSubmitting] = useState(false);
@@ -80,44 +93,6 @@ export function GeneratePage() {
     navigate('.', { replace: true, state: null });
   }, [location.state, navigate]);
 
-  useEffect(() => {
-    if (styleAssets.length === 0) {
-      setStyleAnalysis(null);
-      setStyleAnalysisError(null);
-      setStyleAnalysisLoading(false);
-      return;
-    }
-
-    const assetIds = styleAssets.map((asset) => asset.id);
-    let canceled = false;
-    setStyleAnalysisLoading(true);
-    setStyleAnalysis(null);
-    setStyleAnalysisError(null);
-
-    api
-      .analyzeStyleReferences(assetIds)
-      .then((response) => {
-        if (!canceled) {
-          setStyleAnalysis(response.analysis);
-        }
-      })
-      .catch((requestError) => {
-        if (!canceled) {
-          setStyleAnalysis(null);
-          setStyleAnalysisError(requestError instanceof Error ? requestError.message : '风格分析失败');
-        }
-      })
-      .finally(() => {
-        if (!canceled) {
-          setStyleAnalysisLoading(false);
-        }
-      });
-
-    return () => {
-      canceled = true;
-    };
-  }, [styleAssets]);
-
   const handleUpload = async (file: File, category: 'personal_reference' | 'style_reference') => {
     try {
       setError(null);
@@ -134,12 +109,12 @@ export function GeneratePage() {
 
   return (
     <div className={pageStackClass}>
-      <PageSection title="个人形象参考图" subtitle="上传清晰正脸或半身照片，帮助 AI 保留你的个人特征。">
+      <PageSection title="原图" subtitle="上传需要保留主体、人物特征或物体细节的图片；有自定义需求时可以不上传。">
         <UploadCard
-          title="个人形象参考图"
-          description="建议选择光线自然、面部清晰、无遮挡的人像照片。"
-          actionLabel="上传个人照片"
-          iconLabel="人像"
+          title="原图"
+          description="可上传自拍、产品、角色或任何需要保留主体特征的原始图片。"
+          actionLabel="上传原图"
+          iconLabel="原图"
           values={personalAssets}
           onAdd={(file) => void handleUpload(file, 'personal_reference')}
           onRemove={(assetId) => setPersonalAssets((current) => current.filter((asset) => asset.id !== assetId))}
@@ -147,62 +122,50 @@ export function GeneratePage() {
         />
       </PageSection>
 
-      <PageSection title="风格参考图" subtitle="上传你喜欢的艺术风格、摄影质感或头像氛围。">
+      <PageSection title="参考图" subtitle="上传想要复刻的场景、构图、摄影质感、绘画画风或整体视觉语言。">
         <UploadCard
-          title="风格参考图"
-          description="可上传插画、摄影、杂志或艺术肖像作为风格灵感。"
-          actionLabel="上传风格参考"
-          iconLabel="风格"
+          title="参考图"
+          description="可上传摄影、插画、电影截图、海报或任何你想借鉴的视觉参考。"
+          actionLabel="上传参考图"
+          iconLabel="参考"
           values={styleAssets}
           onAdd={(file) => void handleUpload(file, 'style_reference')}
           onRemove={(assetId) => setStyleAssets((current) => current.filter((asset) => asset.id !== assetId))}
           onPreview={setPreviewAsset}
         />
-        {styleAnalysisLoading ? <p className={helperTextClass}>正在分析参考图风格...</p> : null}
-        {styleAnalysis ? (
-          <div className="grid gap-3 rounded-[24px] border border-[#cfa983]/24 bg-white/64 p-4 shadow-[0_16px_34px_rgba(86,67,54,0.08)]">
-            <div className="flex flex-wrap gap-2">
-              {styleAnalysis.tags.map((tag) => (
-                <span key={tag} className="rounded-full border border-[#cfa983]/28 bg-[#fff8f2] px-3 py-1 text-xs text-[#7a5b43]">
-                  {tag}
-                </span>
-              ))}
-            </div>
-            <p className="text-sm leading-6 text-[#4d403a]">{styleAnalysis.description}</p>
-          </div>
-        ) : null}
-        {styleAnalysisError ? <p className="text-sm text-[#b36f67]">{styleAnalysisError}</p> : null}
       </PageSection>
 
-      <PageSection title="个性化定制" subtitle="补充你想强调的人物气质、场景、光线、色调或构图要求。">
+      <PageSection title="自定义需求" subtitle="写明你最想要的最终效果；这部分优先级最高。">
         <label className={fieldLabelClass}>
-          <span>补充需求</span>
+          <span>需求文本</span>
           <textarea
             className={`${inputClass} min-h-[150px] resize-y`}
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
             rows={6}
-            placeholder="例如：希望更松弛自然，保留微笑，背景干净，整体适合社交媒体头像。"
+            placeholder="例如：提取原图人物特征，复刻参考图的赛博夜景、霓虹光线和电影感构图，整体更冷峻。"
           />
         </label>
-        <p className={helperTextClass}>这部分会作为最高优先级需求参与生成；不填写也可以直接使用参考图风格。</p>
+        <p className={helperTextClass}>有需求文本时可以纯文本生成；只要上传了任意图片，就会先由 AI 理解图片并生成内部生图 prompt。</p>
       </PageSection>
 
-      <PageSection title="生成设置" subtitle="选择更接近 Stitch 的生成偏好，数量大于 1 时会并发创建多条任务，而不是在一次请求中批量返回多图。">
+      <PageSection title="生成设置" subtitle="选择比例、分辨率和生成数量。自动比例会优先匹配第一张参考图的最近常用比例，没有参考图时使用 3:4。">
         <div className="grid gap-4">
           <SegmentedControl label="图片比例" options={ratioOptions} value={ratio} onChange={setRatio} />
+          {ratio === 'auto' ? <p className={helperTextClass}>当前自动比例：{describeAutoRatio(styleAssets[0])}</p> : null}
           <SegmentedControl label="图片分辨率" options={resolutionOptions} value={resolution} onChange={setResolution} />
           <SegmentedControl label="生成数量" options={quantityOptions} value={quantity} onChange={setQuantity} />
-          <p className={helperTextClass}>默认生成 1 张。高分辨率会按比例换算成合法尺寸，并规范到不超过像素上限的 16 倍数；当数量大于 1 时，你会进入我的记录统一查看每张结果。</p>
+          <p className={helperTextClass}>高分辨率会按比例换算成合法尺寸，并规范到不超过像素上限的 16 倍数；数量大于 1 时会创建多条任务。</p>
         </div>
         {error ? <div className="mt-3 text-sm text-[#b36f67]">{error}</div> : null}
         <button
           type="button"
           className={cx(primaryButtonClass, 'mt-4')}
-          disabled={personalAssets.length === 0 || submitting || styleAnalysisLoading}
+          disabled={submitting}
           onClick={async () => {
-            if (personalAssets.length === 0) {
-              setError('请先上传个人形象参考图');
+            const userPrompt = prompt.trim();
+            if (!userPrompt && (personalAssets.length === 0 || styleAssets.length === 0)) {
+              setError('未填写需求文本时，请同时上传原图和参考图');
               return;
             }
 
@@ -210,16 +173,15 @@ export function GeneratePage() {
               setSubmitting(true);
               setError(null);
               const response = await api.createTask({
-                prompt,
-                styleTags: styleAnalysis?.tags ?? [],
-                styleReferenceAnalysis: styleAnalysis,
+                prompt: userPrompt,
+                styleTags: [],
                 personalReferenceAssetIds: personalAssets.map((asset) => asset.id),
                 styleReferenceAssetIds: styleAssets.map((asset) => asset.id),
                 quantity: Number(quantity),
                 generationParams: {
                   model: 'gpt-image-2',
                   quality: 'high',
-                  size: normalizeImageSize(ratio, resolution),
+                  size: normalizeImageSize(ratio, resolution, styleAssets[0]),
                   outputFormat: 'png',
                 },
               });
@@ -235,9 +197,9 @@ export function GeneratePage() {
             }
           }}
         >
-          {styleAnalysisLoading ? '正在分析风格...' : submitting ? '正在创建任务...' : '开始生成'}
+          {submitting ? '正在创建任务...' : '开始生成'}
         </button>
-        <p className={`mt-3 ${helperTextClass}`}>预计 30-60 秒完成，可在我的记录中查看进度。</p>
+        <p className={`mt-3 ${helperTextClass}`}>纯文本会直接生成；包含图片时会先规划生图 prompt。预计 30-60 秒完成，可在我的记录中查看进度。</p>
       </PageSection>
       <ImageLightbox
         image={previewAsset ? { src: previewAsset.fileUrl, alt: previewAsset.fileName, width: previewAsset.width, height: previewAsset.height } : null}
@@ -272,9 +234,9 @@ function SegmentedControl<T extends string>({ label, options, value, onChange }:
   );
 }
 
-function normalizeImageSize(ratio: RatioValue, resolution: ResolutionValue) {
+function normalizeImageSize(ratio: RatioValue, resolution: ResolutionValue, referenceAsset: Asset | undefined) {
   const base = getResolutionBase(resolution);
-  const { width, height } = getRatioDimensions(ratio, base);
+  const { width, height } = getRatioDimensions(ratio, base, referenceAsset);
   const normalized = normalizeSize(width, height);
   return `${normalized.width}x${normalized.height}`;
 }
@@ -289,12 +251,27 @@ function getResolutionBase(resolution: ResolutionValue) {
   return 1024;
 }
 
-function getRatioDimensions(ratio: RatioValue, base: number) {
+function getRatioDimensions(ratio: RatioValue, base: number, referenceAsset?: Asset) {
+  if (ratio === 'auto') {
+    return getRatioDimensions(resolveAutoRatio(referenceAsset), base);
+  }
   if (ratio === '1:1') {
     return { width: base, height: base };
   }
+  if (ratio === '4:3') {
+    return { width: base, height: (base * 3) / 4 };
+  }
   if (ratio === '9:16') {
     return { width: (base * 9) / 16, height: base };
+  }
+  if (ratio === '16:9') {
+    return { width: base, height: (base * 9) / 16 };
+  }
+  if (ratio === '21:9') {
+    return { width: base, height: (base * 9) / 21 };
+  }
+  if (ratio === '9:21') {
+    return { width: (base * 9) / 21, height: base };
   }
   return { width: (base * 3) / 4, height: base };
 }
@@ -363,15 +340,36 @@ function roundDownToMultipleOf16(value: number) {
 function parseControlsFromSize(size: string | undefined): { ratio: RatioValue; resolution: ResolutionValue } {
   const match = size?.match(/^(\d+)x(\d+)$/);
   if (!match) {
-    return { ratio: '1:1', resolution: '2k' };
+    return { ratio: 'auto', resolution: '2k' };
   }
 
   const width = Number(match[1]);
   const height = Number(match[2]);
-  const ratioValue = width === height ? '1:1' : width / height < 0.65 ? '9:16' : '3:4';
+  const ratioValue = findNearestExplicitRatio(width / Math.max(1, height));
   const longest = Math.max(width, height);
   const resolutionValue = longest >= 3600 ? '4k' : longest >= 1900 ? '2k' : '1k';
   return { ratio: ratioValue, resolution: resolutionValue };
+}
+
+function describeAutoRatio(referenceAsset: Asset | undefined) {
+  const resolvedRatio = resolveAutoRatio(referenceAsset);
+  if (!referenceAsset?.width || !referenceAsset.height) {
+    return `${resolvedRatio}（暂无参考图尺寸）`;
+  }
+  return `${resolvedRatio}（已匹配第一张参考图的最近常用比例）`;
+}
+
+function resolveAutoRatio(referenceAsset: Asset | undefined): ExplicitRatioValue {
+  if (!referenceAsset?.width || !referenceAsset.height) {
+    return '3:4';
+  }
+  return findNearestExplicitRatio(referenceAsset.width / referenceAsset.height);
+}
+
+function findNearestExplicitRatio(aspectRatio: number): ExplicitRatioValue {
+  return explicitRatioOptions.reduce((best, next) =>
+    Math.abs(Math.log(next.aspectRatio / aspectRatio)) < Math.abs(Math.log(best.aspectRatio / aspectRatio)) ? next : best
+  ).value;
 }
 
 function toQuantityValue(value: number | undefined): QuantityValue {

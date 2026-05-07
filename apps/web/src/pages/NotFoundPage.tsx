@@ -9,7 +9,7 @@ export function NotFoundPage() {
     <div className={pageStackClass}>
       <PageSection title="页面不存在" subtitle="这个入口已经不可用，请回到当前可用的功能页面。">
         <button type="button" className={secondaryButtonClass} onClick={() => navigate('/')}>
-          返回头像生成
+          返回大宇暗房
         </button>
       </PageSection>
     </div>

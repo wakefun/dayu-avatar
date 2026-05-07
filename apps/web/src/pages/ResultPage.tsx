@@ -62,7 +62,7 @@ export function ResultPage() {
             <img
               className="block h-full max-h-[68vh] w-full bg-white/45 object-contain"
               src={result.thumbnailUrl ?? result.imageUrl}
-              alt="生成头像结果"
+              alt="生成作品结果"
               style={result.width && result.height ? { aspectRatio: `${result.width} / ${result.height}` } : undefined}
             />
           </button>
@@ -119,21 +119,17 @@ export function ResultPage() {
         </div>
       </PageSection>
 
-      <PageSection title="生成参数" subtitle="查看本次头像生成所使用的提示词、风格建议与基础参数。">
+      <PageSection title="生成参数" subtitle="查看本次暗房生成所使用的需求、参考图与基础参数。">
         <dl className="m-0">
           <div className="border-b border-[#807269]/10 py-3.5">
-            <dt className="mb-1.5 font-bold text-[#2f2724]">提示词</dt>
-            <dd className="m-0 text-sm leading-6 text-[#6b5f59]">{task?.prompt || '未填写提示词'}</dd>
-          </div>
-          <div className="border-b border-[#807269]/10 py-3.5">
-            <dt className="mb-1.5 font-bold text-[#2f2724]">风格建议</dt>
-            <dd className="m-0 text-sm leading-6 text-[#6b5f59]">{task?.styleTags.join(' / ') || '无'}</dd>
+            <dt className="mb-1.5 font-bold text-[#2f2724]">自定义需求</dt>
+            <dd className="m-0 text-sm leading-6 text-[#6b5f59]">{task?.prompt || '未填写需求文本'}</dd>
           </div>
           <div className="border-b border-[#807269]/10 py-3.5">
             <dt className="mb-1.5 font-bold text-[#2f2724]">参考图</dt>
             <dd className="m-0 text-sm leading-6 text-[#6b5f59]">
-              个人 {task?.personalReferenceAssets.length ?? 0} 张
-              {task?.styleReferenceAssets.length ? ` / 风格 ${task.styleReferenceAssets.length} 张` : ''}
+              原图 {task?.personalReferenceAssets.length ?? 0} 张
+              {task?.styleReferenceAssets.length ? ` / 参考图 ${task.styleReferenceAssets.length} 张` : ''}
             </dd>
           </div>
           <div className="border-b border-[#807269]/10 py-3.5">
@@ -153,7 +149,7 @@ export function ResultPage() {
       <ImageLightbox
         image={
           result?.imageUrl && previewOpen
-            ? { src: result.thumbnailUrl ?? result.imageUrl, alt: '生成头像结果', width: result.width, height: result.height, meta: result.createdAt ? new Date(result.createdAt).toLocaleString() : undefined }
+            ? { src: result.thumbnailUrl ?? result.imageUrl, alt: '生成作品结果', width: result.width, height: result.height, meta: result.createdAt ? new Date(result.createdAt).toLocaleString() : undefined }
             : null
         }
         onClose={() => setPreviewOpen(false)}

@@ -579,20 +579,19 @@ app.post('/api/generation-tasks', requireAuth, async (req, res, next) => {
     const personalReferenceAssetIds = normalizeAssetIdList(req.body?.personalReferenceAssetIds, req.body?.personalReferenceAssetId, 3);
     const styleReferenceAssetIds = normalizeAssetIdList(req.body?.styleReferenceAssetIds, req.body?.styleReferenceAssetId ?? null, 3);
     const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
-    const styleReferenceAnalysis = normalizeStyleReferenceAnalysis(req.body?.styleReferenceAnalysis);
     const requestedQuantity = Number(req.body?.quantity ?? 1);
     const quantity = Number.isFinite(requestedQuantity) ? Math.max(1, Math.min(8, Math.floor(requestedQuantity))) : 1;
     const generationParams = req.body?.generationParams ?? {};
 
-    if (personalReferenceAssetIds.length === 0) {
-      sendError(res, 400, 'VALIDATION_ERROR', 'personalReferenceAssetIds is required');
+    if (!prompt && (personalReferenceAssetIds.length === 0 || styleReferenceAssetIds.length === 0)) {
+      sendError(res, 400, 'VALIDATION_ERROR', 'custom text is required unless both source and reference images are uploaded');
       return;
     }
 
     for (const assetId of personalReferenceAssetIds) {
       const personalAsset = getOwnedAsset(req.session.userId!, assetId);
       if (!personalAsset || personalAsset.category !== 'personal_reference') {
-        sendError(res, 400, 'VALIDATION_ERROR', 'personal reference asset is invalid');
+        sendError(res, 400, 'VALIDATION_ERROR', 'source image asset is invalid');
         return;
       }
     }
@@ -600,7 +599,7 @@ app.post('/api/generation-tasks', requireAuth, async (req, res, next) => {
     for (const assetId of styleReferenceAssetIds) {
       const styleAsset = getOwnedAsset(req.session.userId!, assetId);
       if (!styleAsset || styleAsset.category !== 'style_reference') {
-        sendError(res, 400, 'VALIDATION_ERROR', 'style reference asset is invalid');
+        sendError(res, 400, 'VALIDATION_ERROR', 'reference image asset is invalid');
         return;
       }
     }
@@ -609,11 +608,10 @@ app.post('/api/generation-tasks', requireAuth, async (req, res, next) => {
     const quality = typeof generationParams.quality === 'string' ? generationParams.quality : defaultImageQuality;
     const size = normalizeOpenAiSize(typeof generationParams.size === 'string' ? generationParams.size : '1024x1536');
     const outputFormat = typeof generationParams.outputFormat === 'string' ? generationParams.outputFormat : 'png';
-    const styleTags = styleReferenceAnalysis?.tags ?? [];
+    const styleTags: string[] = [];
     const summary = await createTaskSummary({
       prompt,
       styleTags,
-      styleReferenceAnalysis,
       personalReferenceCount: personalReferenceAssetIds.length,
       styleReferenceCount: styleReferenceAssetIds.length,
       model,
@@ -627,7 +625,7 @@ app.post('/api/generation-tasks', requireAuth, async (req, res, next) => {
         prompt,
         styleTags,
         summary,
-        personalReferenceAssetId: personalReferenceAssetIds[0]!,
+        personalReferenceAssetId: personalReferenceAssetIds[0] ?? '',
         styleReferenceAssetId: styleReferenceAssetIds[0] ?? null,
         personalReferenceAssetIds,
         styleReferenceAssetIds,
@@ -797,18 +795,13 @@ app.post('/api/generation-tasks/:taskId/retry', requireAuth, (req, res) => {
 
   const personalReferenceAssetIds = getTaskReferenceAssetIds(sourceTask, 'personal');
   const styleReferenceAssetIds = getTaskReferenceAssetIds(sourceTask, 'style');
+  const styleTags = parseStoredStyleTags(sourceTask.style_tags_json);
   const task = createGenerationTask({
     userId: sourceTask.user_id,
     prompt: sourceTask.prompt,
-    styleTags: parseStoredStyleTags(sourceTask.style_tags_json),
-    summary: sourceTask.summary ?? buildFallbackTaskSummary({
-      prompt: sourceTask.prompt,
-      styleTags: parseStoredStyleTags(sourceTask.style_tags_json),
-      personalReferenceCount: personalReferenceAssetIds.length,
-      styleReferenceCount: styleReferenceAssetIds.length,
-      size: sourceTask.size,
-    }),
-    personalReferenceAssetId: personalReferenceAssetIds[0]!,
+    styleTags,
+    summary: getTaskSummary(sourceTask),
+    personalReferenceAssetId: personalReferenceAssetIds[0] ?? '',
     styleReferenceAssetId: styleReferenceAssetIds[0] ?? null,
     personalReferenceAssetIds,
     styleReferenceAssetIds,
@@ -958,7 +951,10 @@ app.get('/api/history', requireAuth, async (req, res, next) => {
         styleTags: parseStoredStyleTags(task.style_tags_json),
         personalReferenceAssets: getTaskReferenceAssets(task, 'personal'),
         styleReferenceAssets: getTaskReferenceAssets(task, 'style'),
-        referenceTypes: task.style_reference_asset_id ? ['personal_reference', 'style_reference'] : ['personal_reference'],
+        referenceTypes: [
+      ...(getTaskReferenceAssetIds(task, 'personal').length > 0 ? ['personal_reference'] : []),
+      ...(getTaskReferenceAssetIds(task, 'style').length > 0 ? ['style_reference'] : []),
+    ],
         generationParams: {
           model: task.model,
           quality: task.quality,
@@ -1391,6 +1387,7 @@ function createUploadedAsset(
 ): AssetRow {
   const id = createId('asset');
   const extension = imageFile.extension;
+  const dimensions = readImageDimensions(file.buffer, imageFile.mimeType);
   const monthFolder = formatMonthPath();
   const fileName = `${id}${extension}`;
   const storagePath = path.join('uploads', category, monthFolder, fileName);
@@ -1409,8 +1406,8 @@ function createUploadedAsset(
     toStaticUrl(`/${storagePath.replaceAll(path.sep, '/')}`),
     fileName,
     imageFile.mimeType,
-    null,
-    null,
+    dimensions?.width ?? null,
+    dimensions?.height ?? null,
     file.size,
     nowIso()
   );
@@ -1541,7 +1538,6 @@ function buildFallbackStyleReferenceAnalysis(count: number): StyleReferenceAnaly
 async function createTaskSummary(input: {
   prompt: string;
   styleTags: string[];
-  styleReferenceAnalysis: StyleReferenceAnalysis | null;
   personalReferenceCount: number;
   styleReferenceCount: number;
   model: string;
@@ -1565,17 +1561,22 @@ async function createTaskSummary(input: {
         messages: [
           {
             role: 'system',
-            content: 'Return one short Chinese title for an avatar generation task. Use 6 to 16 Chinese characters. No markdown, punctuation, quotes, or explanation.',
+            content: [
+              'Return one short Chinese title for an image generation task.',
+              'Briefly describe only the task characteristics, such as style, scene, subject, or user request.',
+              'Use 6 to 14 Chinese characters.',
+              'Do not use generic product words such as 暗室 or 大宇暗房 unless those exact words appear in the user requirements.',
+              'No markdown, punctuation, quotes, or explanation.',
+            ].join(' '),
           },
           {
             role: 'user',
             content: [
               `User requirements: ${input.prompt || '未填写'}`,
-              `Style tags: ${input.styleTags.length > 0 ? input.styleTags.join(' / ') : '无'}`,
-              `Style analysis: ${input.styleReferenceAnalysis?.description ?? '无'}`,
-              `Personal reference images: ${input.personalReferenceCount}`,
-              `Style reference images: ${input.styleReferenceCount}`,
+              `Source images: ${input.personalReferenceCount}`,
+              `Reference images: ${input.styleReferenceCount}`,
               `Output size: ${input.size}`,
+              'Title focus: style, scene, subject, and concrete request only. Avoid product-brand filler.',
             ].join('\n'),
           },
         ],
@@ -1588,30 +1589,59 @@ async function createTaskSummary(input: {
       return fallback;
     }
 
-    return normalizeTaskSummary(extractPromptText(payload)) || fallback;
+    return normalizeTaskSummary(extractPromptText(payload), { sourcePrompt: input.prompt }) || fallback;
   } catch {
     return fallback;
   }
 }
 
-function buildFallbackTaskSummary(input: { prompt: string; styleTags: string[]; styleReferenceAnalysis?: StyleReferenceAnalysis | null; personalReferenceCount: number; styleReferenceCount: number; size: string }) {
+function buildFallbackTaskSummary(input: { prompt: string; styleTags: string[]; personalReferenceCount: number; styleReferenceCount: number; size: string }) {
   const source = input.styleTags.length > 0 ? input.styleTags.join('') : input.prompt.trim();
-  const normalized = normalizeTaskSummary(source);
+  const normalized = normalizeTaskSummary(source, { sourcePrompt: input.prompt });
   if (normalized) {
     return normalized;
   }
 
-  const referenceCopy = input.styleReferenceCount > 0 ? '含风格参考' : '个人头像生成';
-  return normalizeTaskSummary(`${referenceCopy}${input.size}`) || '个人头像生成';
+  if (input.personalReferenceCount > 0 && input.styleReferenceCount > 0) {
+    return '原图风格迁移';
+  }
+  if (input.styleReferenceCount > 0) {
+    return '参考风格复刻';
+  }
+  if (input.personalReferenceCount > 0) {
+    return '原图特征创作';
+  }
+  return '文字创意生成';
 }
 
-function normalizeTaskSummary(value: string) {
-  return value
-    .replace(/["'`“”‘’]/g, '')
+function normalizeTaskSummary(value: string, options: { sourcePrompt?: string } = {}) {
+  const normalized = value
     .replace(/[\r\n]+/g, ' ')
     .replace(/\s+/g, '')
-    .replace(/[。；;,.，、]+$/g, '')
-    .slice(0, 18);
+    .replace(/[^\p{L}\p{N}]/gu, '')
+    .slice(0, 14);
+
+  return stripGenericProductWords(normalized, options.sourcePrompt ?? '').slice(0, 14);
+}
+
+function stripGenericProductWords(value: string, sourcePrompt: string) {
+  let nextValue = value;
+  const compactPrompt = sourcePrompt.replace(/\s+/g, '');
+
+  if (!compactPrompt.includes('大宇暗房')) {
+    nextValue = nextValue.replace(/大宇暗房/g, '');
+  }
+  if (!/Dayu\s*Darkroom/i.test(sourcePrompt)) {
+    nextValue = nextValue.replace(/DayuDarkroom/gi, '');
+  }
+  if (!compactPrompt.includes('暗室')) {
+    nextValue = nextValue.replace(/暗室/g, '');
+  }
+  if (!compactPrompt.includes('暗房')) {
+    nextValue = nextValue.replace(/暗房/g, '');
+  }
+
+  return nextValue;
 }
 
 
@@ -1691,7 +1721,7 @@ function ensureSeedTasks(userId: string) {
     userId,
     prompt: failedPrompt,
     styleTags: ['高级杂志', '胶片质感'],
-    summary: '高级杂志胶片头像',
+    summary: '高级杂志胶片质感',
     personalReferenceAssetId: personalAsset.id,
     styleReferenceAssetId: styleAsset.id,
     personalReferenceAssetIds: [personalAsset.id],
@@ -1708,7 +1738,7 @@ function ensureSeedTasks(userId: string) {
     userId,
     prompt: canceledPrompt,
     styleTags: ['温柔奶油色', '极简留白'],
-    summary: '温柔奶油色极简头像',
+    summary: '温柔奶油色留白',
     personalReferenceAssetId: personalAsset.id,
     styleReferenceAssetId: styleAsset.id,
     personalReferenceAssetIds: [personalAsset.id],
@@ -1781,9 +1811,9 @@ async function syncTask(taskId: string) {
   const elapsed = Date.now() - new Date(task.created_at).getTime();
   const checkpoints = [
     { max: 1600, status: 'queued' as const, percent: 8, step: '排队中' },
-    { max: 3600, status: 'processing' as const, percent: 24, step: '分析个人形象' },
-    { max: 5600, status: 'processing' as const, percent: 48, step: '提取风格氛围' },
-    { max: 7600, status: 'processing' as const, percent: 72, step: '生成头像构图' },
+    { max: 3600, status: 'processing' as const, percent: 24, step: '理解创作需求' },
+    { max: 5600, status: 'processing' as const, percent: 48, step: '规划生图提示词' },
+    { max: 7600, status: 'processing' as const, percent: 72, step: '生成暗房作品' },
     { max: 9600, status: 'processing' as const, percent: 90, step: '高清细化中' },
   ];
 
@@ -1918,26 +1948,21 @@ async function runOpenAiGeneration(taskId: string) {
 
 async function generateOpenAiImage(task: TaskRow): Promise<GeneratedImagePayload> {
   ensureOpenAiConfigured();
-  const requestUrl = buildOpenAiImagesUrl(openAiBaseUrl);
   const [width, height] = parseSize(task.size);
-  const editPrompt = buildOpenAiEditPrompt(task);
-  const requestVariants = buildOpenAiEditRequestVariants(task, editPrompt);
+  const plannedPrompt = await buildImageGenerationPrompt(task);
+  const requestVariants = buildOpenAiImageRequestVariants(task, plannedPrompt);
 
   for (const variant of requestVariants) {
-    const formData = new FormData();
-    for (const file of variant.files) {
-      formData.append('image', new Blob([toArrayBuffer(file.buffer)], { type: file.mimeType }), file.fileName);
-    }
-    for (const [key, value] of Object.entries(variant.fields)) {
-      formData.append(key, value);
-    }
+    const requestUrl = variant.files.length > 0 ? buildOpenAiImageEditsUrl(openAiBaseUrl) : buildOpenAiImageGenerationsUrl(openAiBaseUrl);
+    const requestBody = buildOpenAiImageRequestBody(variant);
 
     const response = await fetch(requestUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${openAiApiKey}`,
+        ...requestBody.headers,
       },
-      body: formData,
+      body: requestBody.body,
       signal: AbortSignal.timeout(openAiRequestTimeoutMs),
     });
 
@@ -2031,122 +2056,202 @@ async function generateOpenAiImage(task: TaskRow): Promise<GeneratedImagePayload
   });
 }
 
-function buildOpenAiEditRequestVariants(task: TaskRow, editPrompt: string): OpenAiEditRequestVariant[] {
-  const personalAssets = getTaskReferenceAssetIds(task, 'personal')
-    .map((assetId) => getAsset(assetId))
-    .filter((asset): asset is AssetRow => Boolean(asset));
-  if (personalAssets.length === 0) {
-    throw createOpenAiGenerationFailure({
-      status: null,
-      providerCode: null,
-      providerType: null,
-      providerMessage: 'Missing personal reference asset for generation task',
-      internalCode: 'OPENAI_MISSING_REFERENCE_ASSET',
-      taskMessage: '缺少个人形象参考图，无法开始生成。',
-    });
+function buildOpenAiImageRequestBody(variant: OpenAiEditRequestVariant): { body: BodyInit; headers: Record<string, string> } {
+  if (variant.files.length === 0) {
+    return {
+      body: JSON.stringify(variant.fields),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    };
   }
 
-  const styleAssets = getTaskReferenceAssetIds(task, 'style')
+  const formData = new FormData();
+  for (const file of variant.files) {
+    formData.append('image', new Blob([toArrayBuffer(file.buffer)], { type: file.mimeType }), file.fileName);
+  }
+  for (const [key, value] of Object.entries(variant.fields)) {
+    formData.append(key, value);
+  }
+  return {
+    body: formData,
+    headers: {},
+  };
+}
+
+function buildOpenAiImageRequestVariants(task: TaskRow, prompt: string): OpenAiEditRequestVariant[] {
+  const sourceAssets = getTaskReferenceAssetIds(task, 'personal')
+    .map((assetId) => getAsset(assetId))
+    .filter((asset): asset is AssetRow => Boolean(asset));
+  const referenceAssets = getTaskReferenceAssetIds(task, 'style')
     .map((assetId) => getAsset(assetId))
     .filter((asset): asset is AssetRow => Boolean(asset));
   const outputFormat = normalizeOutputFormat(task.output_format);
   const baseFields = {
     model: task.model || defaultImageModel,
-    prompt: editPrompt,
+    prompt,
     size: normalizeOpenAiSize(task.size),
   } satisfies Record<string, string>;
-
-  const personalFiles = personalAssets.map((asset, index) => toOpenAiImageFile(asset, `personal-reference-${index + 1}`));
-  const styleFiles = styleAssets.map((asset, index) => toOpenAiImageFile(asset, `style-reference-${index + 1}`));
-  const filesWithStyle = [...personalFiles, ...styleFiles];
-  const filesWithoutStyle = personalFiles;
-
   const withQualityAndFormat = {
     ...baseFields,
     quality: task.quality || defaultImageQuality,
     output_format: outputFormat,
     response_format: 'b64_json',
   };
-
   const withFormatOnly = {
     ...baseFields,
     quality: task.quality || defaultImageQuality,
     output_format: outputFormat,
   };
-
   const minimalFields = {
     ...baseFields,
     quality: task.quality || defaultImageQuality,
   };
+  const sourceFiles = sourceAssets.map((asset, index) => toOpenAiImageFile(asset, `source-image-${index + 1}`));
+  const referenceFiles = referenceAssets.map((asset, index) => toOpenAiImageFile(asset, `reference-image-${index + 1}`));
+  const filesWithReferenceFirst = [...referenceFiles, ...sourceFiles];
+  const fieldVariants = [withQualityAndFormat, withFormatOnly, minimalFields];
 
-  const variants: OpenAiEditRequestVariant[] = [
-    {
-      files: filesWithStyle,
-      fields: withQualityAndFormat,
-    },
-    {
-      files: filesWithStyle,
-      fields: withFormatOnly,
-    },
-    {
-      files: filesWithStyle,
-      fields: minimalFields,
-    },
-  ];
-
-  if (styleAssets.length > 0) {
-    variants.push(
-      {
-        files: filesWithoutStyle,
-        fields: withQualityAndFormat,
-      },
-      {
-        files: filesWithoutStyle,
-        fields: withFormatOnly,
-      },
-      {
-        files: filesWithoutStyle,
-        fields: minimalFields,
-      }
-    );
+  if (filesWithReferenceFirst.length === 0) {
+    return fieldVariants.map((fields) => ({ files: [], fields }));
   }
 
-  return variants;
+  return fieldVariants.map((fields) => ({ files: filesWithReferenceFirst, fields }));
 }
 
-function buildOpenAiEditPrompt(task: TaskRow) {
-  const styleReferenceCount = getTaskReferenceAssetIds(task, 'style').length;
-  const styleTags = parseStoredStyleTags(task.style_tags_json);
+async function buildImageGenerationPrompt(task: TaskRow) {
+  const sourceAssets = getTaskReferenceAssetIds(task, 'personal')
+    .map((assetId) => getAsset(assetId))
+    .filter((asset): asset is AssetRow => Boolean(asset));
+  const referenceAssets = getTaskReferenceAssetIds(task, 'style')
+    .map((assetId) => getAsset(assetId))
+    .filter((asset): asset is AssetRow => Boolean(asset));
   const userPrompt = task.prompt.trim();
+
+  if (sourceAssets.length === 0 && referenceAssets.length === 0) {
+    return userPrompt;
+  }
+
+  return createPlannedImagePrompt({
+    userPrompt,
+    sourceAssets,
+    referenceAssets,
+    size: normalizeOpenAiSize(task.size),
+  });
+}
+
+async function createPlannedImagePrompt(input: { userPrompt: string; sourceAssets: AssetRow[]; referenceAssets: AssetRow[]; size: string }) {
+  const fallback = buildFallbackPlannedImagePrompt(input);
+  if (!openAiApiKey || !openAiBaseUrl) {
+    return fallback;
+  }
+
+  try {
+    const response = await fetch(buildOpenAiChatCompletionsUrl(openAiBaseUrl), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${openAiApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: defaultPromptModel,
+        messages: [
+          {
+            role: 'system',
+            content: [
+              'You are the prompt planner for 大宇暗房, an image creation studio.',
+              'Given role-labeled uploaded images and optional user requirements, infer the desired final image and return one production-ready image generation prompt.',
+              'User custom requirements have the highest priority. If they conflict with image-derived guidance, follow the user requirements first.',
+              'Do not mention that you are analyzing images. Return only the final prompt, no markdown or explanation.',
+            ].join(' '),
+          },
+          {
+            role: 'user',
+            content: buildPromptPlanningMessage(input),
+          },
+        ],
+      }),
+      signal: AbortSignal.timeout(Math.min(openAiRequestTimeoutMs, 60_000)),
+    });
+
+    const payload = await readOpenAiChatResponse(response);
+    if (!response.ok) {
+      return fallback;
+    }
+
+    return normalizePlannedImagePrompt(extractPromptText(payload)) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function buildPromptPlanningMessage(input: { userPrompt: string; sourceAssets: AssetRow[]; referenceAssets: AssetRow[]; size: string }) {
+  return [
+    {
+      type: 'text',
+      text: [
+        `User custom requirements (highest priority): ${input.userPrompt || 'None'}`,
+        `Source image count: ${input.sourceAssets.length}. Source images provide subject, identity, object, and feature information to preserve when relevant.`,
+        `Reference image count: ${input.referenceAssets.length}. Reference images provide style, scene, composition, medium, lighting, palette, mood, and visual language.`,
+        `Requested output size: ${input.size}.`,
+        'If source and reference images are both present, preserve the source subject/features while recreating the reference style/scene/visual language. Never copy identity from reference images.',
+      ].join('\n'),
+    },
+    ...input.sourceAssets.flatMap((asset, index) => [
+      {
+        type: 'text',
+        text: `Source image ${index + 1}: extract and preserve the subject/features from this image as applicable.`,
+      },
+      {
+        type: 'image_url',
+        image_url: {
+          url: buildAssetDataUrl(asset),
+        },
+      },
+    ]),
+    ...input.referenceAssets.flatMap((asset, index) => [
+      {
+        type: 'text',
+        text: `Reference image ${index + 1}: extract style, scene, composition, lighting, palette, medium, texture, and mood from this image.`,
+      },
+      {
+        type: 'image_url',
+        image_url: {
+          url: buildAssetDataUrl(asset),
+        },
+      },
+    ]),
+  ];
+}
+
+function buildFallbackPlannedImagePrompt(input: { userPrompt: string; sourceAssets: AssetRow[]; referenceAssets: AssetRow[]; size: string }) {
   const lines = [
-    'Create one premium avatar image by editing the uploaded personal reference image(s).',
-    'Preserve the real person\'s recognizable identity: facial structure, face shape, eyes, nose, mouth, hairstyle, and signature features. Do not invent a different person.',
-    'The output should be refined, warm, luminous, gallery-like, and suitable for a premium profile avatar.',
+    'Create one refined image for 大宇暗房.',
+    'Produce a polished, coherent, high-quality final image with strong composition, clear subject, intentional lighting, and tasteful color design.',
   ];
 
-  if (styleReferenceCount === 1) {
-    lines.push(
-      'There is exactly one style reference image. Fully recreate its style, composition, scene structure, lighting, color palette, texture, and overall visual language. The main operation is face/identity replacement: keep the reference image\'s visual setup while replacing the subject identity with the uploaded personal reference identity. Never copy the identity or facial features from the style reference.'
-    );
-  } else if (styleReferenceCount > 1) {
-    lines.push(
-      'There are multiple style reference images. Treat style-reference-1 as the main image: restore its scene, composition, camera/framing, lighting direction, and spatial arrangement. Use the other style reference images only as secondary style cues for palette, texture, rendering medium, mood, and details. Preserve the personal reference identity and never copy any identity from style references.'
-    );
-  } else {
-    lines.push('No style reference image is provided. Use the written custom requirements and the premium avatar preset while preserving the personal reference identity.');
+  if (input.sourceAssets.length > 0) {
+    lines.push('Use the uploaded source image(s) to preserve the main subject, identity, object features, shape language, and recognizable details where relevant.');
   }
-
-  if (styleTags.length > 0) {
-    lines.push(`Style analysis tags: ${styleTags.join(' / ')}.`);
+  if (input.referenceAssets.length === 1) {
+    lines.push('Use the uploaded reference image to recreate its style, scene, composition, lighting, color palette, texture, medium, and mood.');
+  } else if (input.referenceAssets.length > 1) {
+    lines.push('Use reference image 1 as the main scene/composition reference, and use later reference images as secondary cues for palette, texture, rendering medium, mood, and details.');
   }
-
-  if (userPrompt) {
-    lines.push(`Highest priority user requirements: ${userPrompt}`);
-    lines.push('If any instruction conflicts, follow the user requirements above first, then the style reference prompt, then the general avatar preset.');
+  if (input.userPrompt) {
+    lines.push(`Highest priority user requirements: ${input.userPrompt}`);
+    lines.push('If any instruction conflicts, follow the user requirements first, then source preservation, then reference style guidance.');
   }
-
-  lines.push(`Requested output size: ${normalizeOpenAiSize(task.size)}.`);
+  lines.push(`Requested output size: ${input.size}.`);
   return lines.join('\n\n');
+}
+
+function normalizePlannedImagePrompt(value: string) {
+  return value
+    .replace(/^```[a-z]*\s*/i, '')
+    .replace(/```$/g, '')
+    .trim()
+    .slice(0, 4000);
 }
 
 function buildOpenAiApiUrl(baseUrl: string, endpointPath: string) {
@@ -2166,8 +2271,12 @@ function buildOpenAiApiUrl(baseUrl: string, endpointPath: string) {
   return url.toString();
 }
 
-function buildOpenAiImagesUrl(baseUrl: string) {
+function buildOpenAiImageEditsUrl(baseUrl: string) {
   return buildOpenAiApiUrl(baseUrl, '/v1/images/edits');
+}
+
+function buildOpenAiImageGenerationsUrl(baseUrl: string) {
+  return buildOpenAiApiUrl(baseUrl, '/v1/images/generations');
 }
 
 function buildOpenAiChatCompletionsUrl(baseUrl: string) {
@@ -2546,7 +2655,10 @@ function mapRecordItem(task: RecordRow) {
     styleTags: parseStoredStyleTags(task.style_tags_json),
     personalReferenceAssets: getTaskReferenceAssets(task, 'personal'),
     styleReferenceAssets: getTaskReferenceAssets(task, 'style'),
-    referenceTypes: task.style_reference_asset_id ? ['personal_reference', 'style_reference'] : ['personal_reference'],
+    referenceTypes: [
+      ...(getTaskReferenceAssetIds(task, 'personal').length > 0 ? ['personal_reference'] : []),
+      ...(getTaskReferenceAssetIds(task, 'style').length > 0 ? ['style_reference'] : []),
+    ],
     generationParams: {
       model: task.model,
       quality: task.quality,
@@ -2578,7 +2690,8 @@ function mapRecordItem(task: RecordRow) {
 }
 
 function getTaskSummary(task: TaskRow) {
-  return task.summary || buildFallbackTaskSummary({
+  const storedSummary = task.summary ? normalizeTaskSummary(task.summary, { sourcePrompt: task.prompt }) : '';
+  return storedSummary || buildFallbackTaskSummary({
     prompt: task.prompt,
     styleTags: parseStoredStyleTags(task.style_tags_json),
     personalReferenceCount: getTaskReferenceAssetIds(task, 'personal').length,
@@ -2601,7 +2714,7 @@ function getTaskReferenceAssets(task: TaskRow, type: 'personal' | 'style') {
 }
 
 function parseStoredAssetIds(assetIdsJson: string | null, fallback: string | null) {
-  const fallbackIds = fallback ? [fallback] : [];
+  const fallbackIds = fallback?.trim() ? [fallback] : [];
   if (!assetIdsJson) {
     return fallbackIds;
   }
@@ -2629,12 +2742,12 @@ function mapSessionSummary(sessionId: string, sessionData: session.SessionData) 
 
 function taskProgressMessage(task: TaskRow) {
   if (task.status === 'completed') {
-    return '头像生成已完成';
+    return '暗房作品已完成';
   }
   if (task.status === 'failed') {
-    return '头像生成失败';
+    return '暗房生成失败';
   }
-  return '头像生成进行中';
+  return '暗房生成进行中';
 }
 
 function getUser(userId: string) {
@@ -3032,17 +3145,32 @@ function parseStoredStyleTags(styleTagsJson: string) {
 }
 
 function toOpenAiImageFile(asset: AssetRow, fallbackStem: string) {
-  const absolutePath = path.join(dataRoot, asset.storage_path);
   return {
-    buffer: fs.readFileSync(absolutePath),
-    mimeType: asset.mime_type || 'application/octet-stream',
-    fileName: buildOpenAiUploadFilename(asset, fallbackStem),
+    buffer: createProviderRequestWebp(asset.storage_path),
+    mimeType: 'image/webp',
+    fileName: buildOpenAiUploadFilename(fallbackStem),
   };
 }
 
-function buildOpenAiUploadFilename(asset: AssetRow, fallbackStem: string) {
-  const extension = mimeToExtension(asset.mime_type);
-  return `${fallbackStem}${extension}`;
+function createProviderRequestWebp(sourceStoragePath: string) {
+  try {
+    return execFileSync(cwebpBin, ['-quiet', '-q', '91', path.join(dataRoot, sourceStoragePath), '-o', '-'], {
+      maxBuffer: 20 * 1024 * 1024,
+    });
+  } catch {
+    throw createOpenAiGenerationFailure({
+      status: null,
+      providerCode: null,
+      providerType: null,
+      providerMessage: null,
+      internalCode: 'CWEBP_PROVIDER_IMAGE_FAILED',
+      taskMessage: '生成前图片压缩失败，请检查 cwebp 是否已正确安装。',
+    });
+  }
+}
+
+function buildOpenAiUploadFilename(fallbackStem: string) {
+  return `${fallbackStem}.webp`;
 }
 
 function toArrayBuffer(buffer: Buffer) {
@@ -3058,6 +3186,102 @@ function detectImageFile(buffer: Buffer) {
   }
   if (isWebp(buffer)) {
     return { mimeType: 'image/webp', extension: '.webp' };
+  }
+
+  return null;
+}
+
+function readImageDimensions(buffer: Buffer, mimeType: string) {
+  try {
+    if (mimeType === 'image/png') {
+      return readPngDimensions(buffer);
+    }
+    if (mimeType === 'image/jpeg') {
+      return readJpegDimensions(buffer);
+    }
+    if (mimeType === 'image/webp') {
+      return readWebpDimensions(buffer);
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function readPngDimensions(buffer: Buffer) {
+  if (buffer.byteLength < 24 || !isPng(buffer)) {
+    return null;
+  }
+  const width = buffer.readUInt32BE(16);
+  const height = buffer.readUInt32BE(20);
+  return width > 0 && height > 0 ? { width, height } : null;
+}
+
+function readJpegDimensions(buffer: Buffer) {
+  if (!isJpeg(buffer)) {
+    return null;
+  }
+
+  let offset = 2;
+  while (offset + 9 < buffer.byteLength) {
+    if (buffer[offset] !== 0xff) {
+      return null;
+    }
+
+    const marker = buffer[offset + 1];
+    offset += 2;
+    if (marker === 0xd9 || marker === 0xda) {
+      return null;
+    }
+    if (marker >= 0xd0 && marker <= 0xd7) {
+      continue;
+    }
+
+    const length = buffer.readUInt16BE(offset);
+    if (length < 2 || offset + length > buffer.byteLength) {
+      return null;
+    }
+    if (isJpegStartOfFrameMarker(marker)) {
+      const height = buffer.readUInt16BE(offset + 3);
+      const width = buffer.readUInt16BE(offset + 5);
+      return width > 0 && height > 0 ? { width, height } : null;
+    }
+    offset += length;
+  }
+
+  return null;
+}
+
+function isJpegStartOfFrameMarker(marker: number) {
+  return (
+    (marker >= 0xc0 && marker <= 0xc3) ||
+    (marker >= 0xc5 && marker <= 0xc7) ||
+    (marker >= 0xc9 && marker <= 0xcb) ||
+    (marker >= 0xcd && marker <= 0xcf)
+  );
+}
+
+function readWebpDimensions(buffer: Buffer) {
+  if (buffer.byteLength < 16 || !isWebp(buffer)) {
+    return null;
+  }
+
+  const chunkType = buffer.toString('ascii', 12, 16);
+  if (chunkType === 'VP8 ' && buffer.byteLength >= 30) {
+    const width = buffer.readUInt16LE(26) & 0x3fff;
+    const height = buffer.readUInt16LE(28) & 0x3fff;
+    return width > 0 && height > 0 ? { width, height } : null;
+  }
+  if (chunkType === 'VP8L' && buffer.byteLength >= 25) {
+    const bits = buffer.readUInt32LE(21);
+    const width = (bits & 0x3fff) + 1;
+    const height = ((bits >> 14) & 0x3fff) + 1;
+    return { width, height };
+  }
+  if (chunkType === 'VP8X' && buffer.byteLength >= 30) {
+    const width = 1 + buffer.readUIntLE(24, 3);
+    const height = 1 + buffer.readUIntLE(27, 3);
+    return { width, height };
   }
 
   return null;
@@ -3486,19 +3710,6 @@ function sendError(res: Response, status: number, code: string, message: string)
       message,
     },
   });
-}
-
-function mimeToExtension(mimeType: string) {
-  if (mimeType === 'image/png') {
-    return '.png';
-  }
-  if (mimeType === 'image/webp') {
-    return '.webp';
-  }
-  if (mimeType === 'image/jpeg') {
-    return '.jpg';
-  }
-  return '.bin';
 }
 
 function toStaticUrl(relativeUrl: string) {

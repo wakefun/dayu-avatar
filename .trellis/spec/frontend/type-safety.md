@@ -34,34 +34,32 @@ export type GenerationTask = {
 };
 ```
 
-- Style-reference analysis contract:
+- Generation creation contract:
 
 ```ts
-export type StyleReferenceAnalysis = {
-  tags: string[];
-  description: string;
-};
-
-api.analyzeStyleReferences(assetIds: string[]): Promise<{ analysis: StyleReferenceAnalysis }>;
-```
-
-
 api.createTask({
   prompt,
-  styleTags,
-  styleReferenceAnalysis,
+  styleTags: [],
   personalReferenceAssetIds,
   styleReferenceAssetIds,
   quantity,
-  generationParams,
+  generationParams: {
+    model,
+    quality,
+    size,
+    outputFormat,
+  },
 });
+```
+
+- `styleReferenceAnalysis` is not part of the frontend task-creation payload for the Darkroom MVP.
 ```
 
 ### 3. Contracts
 
 - Frontend sends array-based reference ids to `POST /api/generation-tasks`; it must not send only the legacy single-id fields.
-- Frontend requests style-reference analysis through `api.analyzeStyleReferences(assetIds)` whenever uploaded style references change, then sends the returned `StyleReferenceAnalysis` to task creation.
-- Frontend treats `StyleReferenceAnalysis.tags` as display/title context only; it must not auto-insert those tags or generated snippets into the custom prompt textarea.
+- Frontend must not request upload-time style-reference analysis in the Darkroom MVP; generation-time prompt planning is backend-owned.
+- Frontend sends custom requirements as `prompt`; it must not auto-insert tags or generated snippets into the custom prompt textarea.
 - Frontend reads `promptSummary`/`summary` from API payloads instead of truncating raw prompts locally for cards.
 - Records items must carry `prompt`, `styleTags`, `personalReferenceAssets`, `styleReferenceAssets`, and `generationParams` so navigation state can prefill the generation page.
 - Records responses must include `pagination.nextCursor` and active terminal status data; the records page merges the SSE first page with paged results instead of choosing between queue and history shapes.
@@ -72,8 +70,8 @@ api.createTask({
 
 ### 4. Validation & Error Matrix
 
-- Style-reference analysis request fails -> page keeps typed prompt/upload state and displays a fallback error instead of inventing local analysis.
-- Missing `width`/`height` on images -> UI still renders, but without aspect-ratio overrides.
+- Task creation with empty custom text and missing source/reference pair -> frontend blocks submit before API call.
+- Missing `width`/`height` on the first reference image -> UI still renders, and `auto` ratio falls back to `3:4`.
 - Backend returns only legacy single-id fields for old data -> frontend should rely on array fields already normalized by the API and avoid reconstructing arrays itself.
 - Result route opened for a queued or processing task -> redirect to `/generate/loading/:taskId` before requesting the result endpoint.
 - Result route opened for a failed or canceled task -> show terminal error/canceled copy and do not call `/api/generation-tasks/:taskId/result`.
@@ -81,7 +79,8 @@ api.createTask({
 
 ### 5. Good/Base/Bad Cases
 
-- Good: `GeneratePage` stores `StyleReferenceAnalysis | null`, clears stale analysis while loading, and passes the exact object into `api.createTask`.
+- Good: `GeneratePage` stores source assets and reference assets separately, then sends their id arrays plus `prompt` into `api.createTask`.
+- Good: `GeneratePage` resolves `auto` from the first reference asset only and snaps it to a supported common ratio before computing `generationParams.size`.
 - Good: `RecordsPage` consumes `RecordsResponse`, renders queued/processing/completed/failed/canceled items together, and paginates with `nextCursor`.
 - Good: `GalleryPage` uses server-provided image dimensions rather than hard-coded portrait ratios.
 - Base: image preview components accept nullable dimensions and degrade to CSS defaults when missing.
@@ -91,7 +90,8 @@ api.createTask({
 ### 6. Tests Required
 
 - `pnpm typecheck` must fail if backend/frontend task contracts drift.
-- Add assertions that style-reference upload/remove refreshes `StyleReferenceAnalysis`, and task creation includes the latest analysis object plus array-based asset ids.
+- Add assertions that task creation includes array-based source/reference asset ids and never includes `styleReferenceAnalysis`.
+- Add assertions that `auto` ratio ignores source image dimensions, snaps the first reference image ratio to the nearest supported ratio, and falls back to `3:4` without reference dimensions.
 - Add assertions that gallery/result/reference images still render when width/height are null.
 - Add assertions that avatar updates refresh `user.avatarUrl` from the API response.
 
@@ -103,6 +103,7 @@ api.createTask({
 api.createTask({
   personalReferenceAssetId: personalAsset.id,
   styleReferenceAssetId: styleAsset?.id ?? null,
+  styleReferenceAnalysis,
 });
 ```
 
@@ -110,9 +111,10 @@ api.createTask({
 
 ```ts
 api.createTask({
+  prompt,
+  styleTags: [],
   personalReferenceAssetIds: personalAssets.map((asset) => asset.id),
   styleReferenceAssetIds: styleAssets.map((asset) => asset.id),
-  styleReferenceAnalysis,
 });
 ```
 

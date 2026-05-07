@@ -13,7 +13,7 @@ import { ResultPage } from './pages/ResultPage';
 import { SettingsPage } from './pages/SettingsPage';
 
 const titles: Record<string, string> = {
-  '/': '头像生成',
+  '/': '大宇暗房',
   '/gallery': '我的图库',
   '/records': '我的记录',
   '/settings': '账户设置',
@@ -92,7 +92,7 @@ export function App() {
     if (location.pathname.startsWith('/generate/result')) {
       return '生成结果';
     }
-    return titles[location.pathname] ?? '大宇头像';
+    return titles[location.pathname] ?? '大宇暗房';
   }, [location.pathname]);
 
   if (loading) {

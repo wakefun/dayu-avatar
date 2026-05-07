@@ -30,7 +30,7 @@ export default defineConfig({
             urlPattern: ({ url }) => url.origin === self.location.origin && url.pathname.startsWith('/assets/'),
             handler: 'CacheFirst',
             options: {
-              cacheName: 'dayu-avatar-assets',
+              cacheName: 'dayu-darkroom-assets',
               cacheableResponse: {
                 statuses: [200],
               },

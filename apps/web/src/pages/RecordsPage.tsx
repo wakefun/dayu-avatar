@@ -100,7 +100,7 @@ export function RecordsPage() {
           {items.length === 0 && !loading ? (
             <div className={`${softCardClass} grid gap-3 py-6 text-center`}>
               <strong className="text-[15px] text-[#2f2724]">还没有生成记录</strong>
-              <p className="m-0 text-sm leading-6 text-[#6b5f59]">完成第一张头像后，进度、结果和再次生成入口都会出现在这里。</p>
+              <p className="m-0 text-sm leading-6 text-[#6b5f59]">完成第一张暗房作品后，进度、结果和再次生成入口都会出现在这里。</p>
               <button type="button" className={primaryButtonClass} onClick={() => navigate('/')}>
                 开始生成
               </button>
@@ -255,7 +255,16 @@ function RecordCard({ item, index, onOpen, onRetry, onRegenerate, onPreview }: R
 function referenceLabel(item: RecordItem) {
   const personalCount = item.personalReferenceAssets.length;
   const styleCount = item.styleReferenceAssets.length;
-  return styleCount > 0 ? `个人参考 ${personalCount} 张 / 风格参考 ${styleCount} 张` : `个人参考 ${personalCount} 张`;
+  if (personalCount > 0 && styleCount > 0) {
+    return `原图 ${personalCount} 张 / 参考图 ${styleCount} 张`;
+  }
+  if (personalCount > 0) {
+    return `原图 ${personalCount} 张`;
+  }
+  if (styleCount > 0) {
+    return `参考图 ${styleCount} 张`;
+  }
+  return '纯文本生成';
 }
 
 function isActiveStatus(status: RecordItem['status']) {
