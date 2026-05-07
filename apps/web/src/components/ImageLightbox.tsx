@@ -5,6 +5,7 @@ type ImageLightboxAction = {
   label: string;
   onClick?: () => void;
   href?: string;
+  download?: boolean;
   disabled?: boolean;
   variant?: 'primary' | 'danger' | 'secondary';
 };
@@ -78,7 +79,7 @@ export function ImageLightbox({ image, actions = [], onClose }: ImageLightboxPro
               <div className="flex flex-wrap justify-center gap-2.5">
                 {actions.map((action) =>
                   action.href ? (
-                    <a key={action.label} className={cx(chipButtonClass(action.variant ?? 'secondary'))} href={action.href}>
+                    <a key={action.label} className={cx(chipButtonClass(action.variant ?? 'secondary'))} href={action.href} download={action.download}>
                       {action.label}
                     </a>
                   ) : (

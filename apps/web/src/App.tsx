@@ -5,18 +5,17 @@ import { api } from './lib/api';
 import type { SessionSummary, User } from './lib/types';
 import { GalleryPage } from './pages/GalleryPage';
 import { GeneratePage } from './pages/GeneratePage';
-import { HistoryPage } from './pages/HistoryPage';
 import { LoadingPage } from './pages/LoadingPage';
 import { LoginPage } from './pages/LoginPage';
-import { QueuePage } from './pages/QueuePage';
+import { RecordsPage } from './pages/RecordsPage';
+import { NotFoundPage } from './pages/NotFoundPage';
 import { ResultPage } from './pages/ResultPage';
 import { SettingsPage } from './pages/SettingsPage';
 
 const titles: Record<string, string> = {
   '/': '头像生成',
   '/gallery': '我的图库',
-  '/queue': '任务队列',
-  '/history': '历史记录',
+  '/records': '我的记录',
   '/settings': '账户设置',
 };
 
@@ -33,6 +32,7 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installedDisplayMode, setInstalledDisplayMode] = useState(false);
 
   const refreshSession = async () => {
     const response = await api.me();
@@ -70,6 +70,21 @@ export function App() {
     return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
   }, []);
 
+  useEffect(() => {
+    const standaloneQuery = window.matchMedia('(display-mode: standalone)');
+    const updateInstalledDisplayMode = () => {
+      setInstalledDisplayMode(standaloneQuery.matches || (window.navigator as Navigator & { standalone?: boolean }).standalone === true);
+    };
+
+    updateInstalledDisplayMode();
+    standaloneQuery.addEventListener('change', updateInstalledDisplayMode);
+    window.addEventListener('appinstalled', updateInstalledDisplayMode);
+    return () => {
+      standaloneQuery.removeEventListener('change', updateInstalledDisplayMode);
+      window.removeEventListener('appinstalled', updateInstalledDisplayMode);
+    };
+  }, []);
+
   const title = useMemo(() => {
     if (location.pathname.startsWith('/generate/loading')) {
       return '生成中';
@@ -102,7 +117,7 @@ export function App() {
       title={title}
       user={user}
       drawerOpen={drawerOpen}
-      installAvailable={Boolean(installPrompt)}
+      installAvailable={Boolean(installPrompt) && !installedDisplayMode}
       onOpenDrawer={() => setDrawerOpen(true)}
       onCloseDrawer={() => setDrawerOpen(false)}
       onInstallApp={async () => {
@@ -121,8 +136,7 @@ export function App() {
         <Route path="/generate/loading/:taskId" element={<LoadingPage />} />
         <Route path="/generate/result/:taskId" element={<ResultPage />} />
         <Route path="/gallery" element={<GalleryPage onUserUpdated={setUser} />} />
-        <Route path="/queue" element={<QueuePage />} />
-        <Route path="/history" element={<HistoryPage />} />
+        <Route path="/records" element={<RecordsPage />} />
         <Route
           path="/settings"
           element={
@@ -136,7 +150,7 @@ export function App() {
             />
           }
         />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </AppShell>
   );

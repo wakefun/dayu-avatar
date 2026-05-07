@@ -54,7 +54,7 @@ export function GalleryPage({ onUserUpdated }: GalleryPageProps) {
         image={
           activeItem
             ? {
-                src: activeItem.imageUrl,
+                src: activeItem.thumbnailUrl ?? activeItem.imageUrl,
                 alt: '已保存头像作品',
                 width: activeItem.width,
                 height: activeItem.height,
@@ -74,7 +74,7 @@ export function GalleryPage({ onUserUpdated }: GalleryPageProps) {
                     onUserUpdated(response.user);
                   },
                 },
-                { label: '下载', href: `/api/gallery-items/${activeItem.id}/download` },
+                { label: '下载原图', href: `/api/gallery-items/${activeItem.id}/download` },
                 {
                   label: '删除',
                   variant: 'danger',

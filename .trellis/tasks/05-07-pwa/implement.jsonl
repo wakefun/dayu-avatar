@@ -1,0 +1,6 @@
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Routes, API wrappers, PWA Workbox/static-media constraints, and web validation commands apply to the records/PWA UI changes."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Shared UI recipes, drawer navigation, history regenerate behavior, lightbox preview actions, and mobile UI validation apply."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"SQLite tables, generation result thumbnail asset persistence, public URL mapping, and queue/history payload contracts apply."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"API error envelopes, OpenAI generation contract, queue/history/SSE behavior, and PWA install affordance constraints apply."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Records and thumbnails cross database, API, frontend types, routes, and UI display boundaries."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Queue/history merge and shared image-size logic require avoiding duplicated divergent behavior."}

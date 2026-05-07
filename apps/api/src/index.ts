@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import cors from 'cors';
 import { DatabaseSync } from 'node:sqlite';
 import express from 'express';
@@ -80,6 +81,14 @@ type ResultRow = {
   thumbnail_asset_id: string | null;
   saved_to_gallery: number;
   created_at: string;
+};
+
+type RecordRow = TaskRow & {
+  result_id: string | null;
+  image_url: string | null;
+  thumbnail_url: string | null;
+  image_width: number | null;
+  image_height: number | null;
 };
 
 type GalleryRow = {
@@ -216,6 +225,7 @@ const defaultPromptModel = process.env.OPENAI_PROMPT_MODEL?.trim() || 'gpt-5.5';
 const defaultImageQuality = process.env.OPENAI_IMAGE_QUALITY?.trim() || 'high';
 const defaultOpenAiRequestTimeoutMs = 600_000;
 const openAiRequestTimeoutMs = parseOptionalPositiveIntegerEnv(process.env.OPENAI_REQUEST_TIMEOUT_MS, defaultOpenAiRequestTimeoutMs);
+const cwebpBin = process.env.CWEBP_BIN?.trim() || 'cwebp';
 const oidcDiscoveryUrl = process.env.OIDC_DISCOVERY_URL ?? '';
 const oidcClientId = process.env.OIDC_CLIENT_ID ?? '';
 const oidcClientSecret = process.env.OIDC_CLIENT_SECRET ?? '';
@@ -813,6 +823,62 @@ app.post('/api/generation-tasks/:taskId/retry', requireAuth, (req, res) => {
   res.status(201).json({ task: mapTask(task) });
 });
 
+app.get('/api/records', requireAuth, async (req, res, next) => {
+  try {
+    const page = await getRecordPage(req.session.userId!, parsePaginationLimit(req.query.limit), parsePaginationCursor(req.query.cursor));
+    res.json(page);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get('/api/records/events', requireAuth, async (req, res, next) => {
+  try {
+    const userId = req.session.userId!;
+    prepareSseResponse(res);
+    let lastSerialized = '';
+    let timer: NodeJS.Timeout | null = null;
+    let closed = false;
+
+    const closeStream = () => {
+      closed = true;
+      if (timer) {
+        clearInterval(timer);
+        timer = null;
+      }
+      if (!res.writableEnded) {
+        res.end();
+      }
+    };
+
+    const sendSnapshot = async () => {
+      if (closed) {
+        return;
+      }
+
+      const payload = await getRecordPage(userId, 10, 0);
+      const serialized = JSON.stringify(payload);
+      if (serialized !== lastSerialized) {
+        lastSerialized = serialized;
+        writeSseEvent(res, 'records', payload);
+      }
+    };
+
+    req.on('close', closeStream);
+    await sendSnapshot();
+    if (!closed) {
+      timer = setInterval(() => {
+        void sendSnapshot().catch(() => {
+          writeSseEvent(res, 'error', { message: 'records stream failed' });
+          closeStream();
+        });
+      }, 1500);
+    }
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get('/api/queue', requireAuth, async (req, res, next) => {
   try {
     const items = await getQueueItems(req.session.userId!);
@@ -1182,6 +1248,7 @@ function initSchema() {
   ensureColumn('generation_tasks', 'summary', 'TEXT');
   ensureColumn('generation_tasks', 'personal_reference_asset_ids_json', 'TEXT');
   ensureColumn('generation_tasks', 'style_reference_asset_ids_json', 'TEXT');
+  ensureColumn('generation_results', 'thumbnail_asset_id', 'TEXT');
 }
 
 function ensureColumn(tableName: string, columnName: string, definition: string) {
@@ -1749,10 +1816,16 @@ async function syncTask(taskId: string) {
 }
 
 function finalizeMockTask(taskId: string) {
-  db.prepare(
-    "UPDATE generation_tasks SET status = 'completed', progress_percent = 100, progress_step = '生成完成', updated_at = ?, completed_at = ? WHERE id = ?"
-  ).run(nowIso(), nowIso(), taskId);
-  ensureMockGenerationResult(taskId);
+  try {
+    ensureMockGenerationResult(taskId);
+    db.prepare(
+      "UPDATE generation_tasks SET status = 'completed', progress_percent = 100, progress_step = '生成完成', error_code = NULL, error_message = NULL, updated_at = ?, completed_at = ? WHERE id = ?"
+    ).run(nowIso(), nowIso(), taskId);
+  } catch {
+    db.prepare(
+      "UPDATE generation_tasks SET status = 'failed', progress_percent = 96, progress_step = '缩略图生成失败', error_code = 'GENERATION_FAILED', error_message = ?, updated_at = ? WHERE id = ?"
+    ).run('缩略图生成失败，请检查 cwebp 是否已正确安装。', nowIso(), taskId);
+  }
 }
 
 function ensureMockGenerationResult(taskId: string) {
@@ -1768,7 +1841,24 @@ function ensureMockGenerationResult(taskId: string) {
 
   const [width, height] = parseSize(task.size);
   const imageAsset = createMockGeneratedAsset(task.user_id, task.id, 'generated_result', width, height, task.prompt, false);
-  const thumbAsset = createMockGeneratedAsset(task.user_id, task.id, 'generated_thumbnail', Math.floor(width / 2), Math.floor(height / 2), task.prompt, true);
+  const thumbnailSize = getThumbnailDimensions(width, height);
+  let thumbAsset: AssetRow;
+  try {
+    thumbAsset = createBinaryGeneratedAsset({
+      userId: task.user_id,
+      taskId: task.id,
+      category: 'generated_thumbnail',
+      buffer: createWebpThumbnail(imageAsset.storage_path, width, height),
+      mimeType: 'image/webp',
+      extension: '.webp',
+      width: thumbnailSize.width,
+      height: thumbnailSize.height,
+      fileNameSuffix: 'thumb',
+    });
+  } catch (error) {
+    deleteAsset(imageAsset);
+    throw error;
+  }
   const resultId = createId('res');
 
   db.prepare(
@@ -1813,7 +1903,7 @@ async function runOpenAiGeneration(taskId: string) {
 
   try {
     const generated = await generateOpenAiImage(latestTask);
-    persistGeneratedResult(latestTask, generated);
+    await persistGeneratedResult(latestTask, generated);
     db.prepare(
       "UPDATE generation_tasks SET status = 'completed', progress_percent = 100, progress_step = '生成完成', error_code = NULL, error_message = NULL, updated_at = ?, completed_at = ? WHERE id = ?"
     ).run(nowIso(), nowIso(), taskId);
@@ -2127,7 +2217,7 @@ function extractPromptText(payload: OpenAiChatResponse) {
     .trim();
 }
 
-function persistGeneratedResult(task: TaskRow, image: GeneratedImagePayload) {
+async function persistGeneratedResult(task: TaskRow, image: GeneratedImagePayload) {
   const existing = getResultByTaskId(task.id);
   if (existing) {
     return existing;
@@ -2144,17 +2234,31 @@ function persistGeneratedResult(task: TaskRow, image: GeneratedImagePayload) {
     height: image.height,
     fileNameSuffix: 'result',
   });
-  const thumbAsset = createBinaryGeneratedAsset({
-    userId: task.user_id,
-    taskId: task.id,
-    category: 'generated_thumbnail',
-    buffer: image.buffer,
-    mimeType: image.mimeType,
-    extension: image.extension,
-    width: image.width,
-    height: image.height,
-    fileNameSuffix: 'thumb',
-  });
+  const thumbnailSize = getThumbnailDimensions(image.width, image.height);
+  let thumbAsset: AssetRow;
+  try {
+    thumbAsset = createBinaryGeneratedAsset({
+      userId: task.user_id,
+      taskId: task.id,
+      category: 'generated_thumbnail',
+      buffer: createWebpThumbnail(imageAsset.storage_path, image.width, image.height),
+      mimeType: 'image/webp',
+      extension: '.webp',
+      width: thumbnailSize.width,
+      height: thumbnailSize.height,
+      fileNameSuffix: 'thumb',
+    });
+  } catch (error) {
+    deleteAsset(imageAsset);
+    throw createOpenAiGenerationFailure({
+      status: null,
+      providerCode: null,
+      providerType: null,
+      providerMessage: error instanceof Error ? truncateForLog(error.message, 200) : null,
+      internalCode: 'CWEBP_THUMBNAIL_FAILED',
+      taskMessage: '缩略图生成失败，请检查 cwebp 是否已正确安装。',
+    });
+  }
   const resultId = createId('res');
 
   db.prepare(
@@ -2164,10 +2268,30 @@ function persistGeneratedResult(task: TaskRow, image: GeneratedImagePayload) {
   return getResultByTaskId(task.id);
 }
 
+function createWebpThumbnail(sourceStoragePath: string, width: number, height: number) {
+  const thumbnailSize = getThumbnailDimensions(width, height);
+  return execFileSync(cwebpBin, ['-quiet', '-q', '88', '-resize', String(thumbnailSize.width), String(thumbnailSize.height), path.join(dataRoot, sourceStoragePath), '-o', '-'], {
+    maxBuffer: 20 * 1024 * 1024,
+  });
+}
+
+function getThumbnailDimensions(width: number, height: number) {
+  const maxEdge = 960;
+  const longestEdge = Math.max(width, height);
+  if (longestEdge <= maxEdge) {
+    return { width, height };
+  }
+
+  const scale = maxEdge / longestEdge;
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}
 function createMockGeneratedAsset(
   userId: string,
   taskId: string,
-  category: 'generated_result' | 'generated_thumbnail',
+  category: 'generated_result',
   width: number,
   height: number,
   seed: string,
@@ -2223,6 +2347,17 @@ function createBinaryGeneratedAsset(input: {
   );
 
   return getAsset(id)!;
+}
+
+function deleteAsset(asset: AssetRow) {
+  try {
+    fs.unlinkSync(path.join(dataRoot, asset.storage_path));
+  } catch (error) {
+    if (!isMissingFileError(error)) {
+      throw error;
+    }
+  }
+  db.prepare('DELETE FROM file_assets WHERE id = ?').run(asset.id);
 }
 
 function mapUser(user: UserRow) {
@@ -2370,6 +2505,75 @@ function mapGalleryItem(itemId: string) {
     height: row.image_height,
     isFavorited: Boolean(row.is_favorited),
     savedAt: row.saved_at,
+  };
+}
+
+async function getRecordPage(userId: string, limit: number, cursor: number) {
+  await syncUserTasks(userId);
+  const rows = db
+    .prepare(
+      `SELECT t.*, r.id as result_id, image_asset.public_url as image_url, thumb_asset.public_url as thumbnail_url,
+              image_asset.width as image_width, image_asset.height as image_height
+       FROM generation_tasks t
+       LEFT JOIN generation_results r ON r.task_id = t.id
+       LEFT JOIN file_assets image_asset ON image_asset.id = r.image_asset_id
+       LEFT JOIN file_assets thumb_asset ON thumb_asset.id = r.thumbnail_asset_id
+       WHERE t.user_id = ?
+       ORDER BY datetime(t.created_at) DESC, t.id DESC
+       LIMIT ? OFFSET ?`
+    )
+    .all(userId, limit + 1, cursor) as RecordRow[];
+  const pageRows = rows.slice(0, limit);
+  const nextCursor = rows.length > limit ? cursor + limit : null;
+
+  return {
+    items: pageRows.map(mapRecordItem),
+    pagination: {
+      limit,
+      nextCursor,
+      hasMore: nextCursor !== null,
+    },
+  };
+}
+
+function mapRecordItem(task: RecordRow) {
+  return {
+    id: task.id,
+    status: task.status,
+    promptSummary: getTaskSummary(task),
+    summary: getTaskSummary(task),
+    prompt: task.prompt,
+    styleTags: parseStoredStyleTags(task.style_tags_json),
+    personalReferenceAssets: getTaskReferenceAssets(task, 'personal'),
+    styleReferenceAssets: getTaskReferenceAssets(task, 'style'),
+    referenceTypes: task.style_reference_asset_id ? ['personal_reference', 'style_reference'] : ['personal_reference'],
+    generationParams: {
+      model: task.model,
+      quality: task.quality,
+      size: task.size,
+      outputFormat: task.output_format,
+    },
+    progress: {
+      percent: task.progress_percent,
+      step: task.progress_step,
+      message: taskProgressMessage(task),
+    },
+    result: task.result_id
+      ? {
+          id: task.result_id,
+          taskId: task.id,
+          imageUrl: task.image_url,
+          thumbnailUrl: task.thumbnail_url,
+          width: task.image_width,
+          height: task.image_height,
+          createdAt: task.completed_at ?? task.updated_at,
+        }
+      : null,
+    errorMessage: task.error_message,
+    createdAt: task.created_at,
+    updatedAt: task.updated_at,
+    completedAt: task.completed_at,
+    sourceTaskId: task.source_task_id,
   };
 }
 
@@ -3170,6 +3374,22 @@ function createSolidPng(width: number, height: number, rgb: [number, number, num
   return PNG.sync.write(png);
 }
 
+function parsePaginationLimit(value: unknown) {
+  const parsed = typeof value === 'string' ? Number(value) : Number.NaN;
+  if (!Number.isInteger(parsed)) {
+    return 10;
+  }
+  return Math.min(30, Math.max(1, parsed));
+}
+
+function parsePaginationCursor(value: unknown) {
+  const parsed = typeof value === 'string' ? Number(value) : Number.NaN;
+  if (!Number.isInteger(parsed)) {
+    return 0;
+  }
+  return Math.max(0, parsed);
+}
+
 function parseSize(size: string) {
   const match = /^(\d+)x(\d+)$/.exec(size);
   if (!match) {
@@ -3219,14 +3439,29 @@ function normalizeImageDimensions(width: number, height: number) {
     nextHeight *= scale;
   }
 
+  return fitRoundedDimensions(nextWidth, nextHeight, maxPixels);
+}
+
+function fitRoundedDimensions(width: number, height: number, maxPixels: number) {
+  let nextWidth = roundDownToMultipleOf16(width);
+  let nextHeight = roundDownToMultipleOf16(height);
+
+  while (nextWidth * nextHeight > maxPixels) {
+    if (nextWidth >= nextHeight) {
+      nextWidth = Math.max(16, nextWidth - 16);
+    } else {
+      nextHeight = Math.max(16, nextHeight - 16);
+    }
+  }
+
   return {
-    width: roundToMultipleOf16(nextWidth),
-    height: roundToMultipleOf16(nextHeight),
+    width: nextWidth,
+    height: nextHeight,
   };
 }
 
-function roundToMultipleOf16(value: number) {
-  return Math.max(16, Math.round(value / 16) * 16);
+function roundDownToMultipleOf16(value: number) {
+  return Math.max(16, Math.floor(value / 16) * 16);
 }
 
 function getSessionExpiry(sessionData: session.SessionData) {

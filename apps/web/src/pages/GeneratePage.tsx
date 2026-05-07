@@ -193,7 +193,7 @@ export function GeneratePage() {
           <SegmentedControl label="图片比例" options={ratioOptions} value={ratio} onChange={setRatio} />
           <SegmentedControl label="图片分辨率" options={resolutionOptions} value={resolution} onChange={setResolution} />
           <SegmentedControl label="生成数量" options={quantityOptions} value={quantity} onChange={setQuantity} />
-          <p className={helperTextClass}>默认生成 1 张。高分辨率会按比例换算成合法尺寸，并规范到 16 的倍数；当数量大于 1 时，你会进入任务队列统一查看每张结果。</p>
+          <p className={helperTextClass}>默认生成 1 张。高分辨率会按比例换算成合法尺寸，并规范到不超过像素上限的 16 倍数；当数量大于 1 时，你会进入我的记录统一查看每张结果。</p>
         </div>
         {error ? <div className="mt-3 text-sm text-[#b36f67]">{error}</div> : null}
         <button
@@ -224,7 +224,7 @@ export function GeneratePage() {
                 },
               });
               if ((response.tasks?.length ?? 0) > 1) {
-                navigate('/queue');
+                navigate('/records');
                 return;
               }
               navigate(`/generate/loading/${response.task.id}`);
@@ -237,7 +237,7 @@ export function GeneratePage() {
         >
           {styleAnalysisLoading ? '正在分析风格...' : submitting ? '正在创建任务...' : '开始生成'}
         </button>
-        <p className={`mt-3 ${helperTextClass}`}>预计 30-60 秒完成，可在任务队列中查看进度。</p>
+        <p className={`mt-3 ${helperTextClass}`}>预计 30-60 秒完成，可在我的记录中查看进度。</p>
       </PageSection>
       <ImageLightbox
         image={previewAsset ? { src: previewAsset.fileUrl, alt: previewAsset.fileName, width: previewAsset.width, height: previewAsset.height } : null}
@@ -335,14 +335,29 @@ function normalizeSize(width: number, height: number) {
     nextHeight *= scale;
   }
 
+  return fitRoundedDimensions(nextWidth, nextHeight, maxPixels);
+}
+
+function fitRoundedDimensions(width: number, height: number, maxPixels: number) {
+  let nextWidth = roundDownToMultipleOf16(width);
+  let nextHeight = roundDownToMultipleOf16(height);
+
+  while (nextWidth * nextHeight > maxPixels) {
+    if (nextWidth >= nextHeight) {
+      nextWidth = Math.max(16, nextWidth - 16);
+    } else {
+      nextHeight = Math.max(16, nextHeight - 16);
+    }
+  }
+
   return {
-    width: roundToMultipleOf16(nextWidth),
-    height: roundToMultipleOf16(nextHeight),
+    width: nextWidth,
+    height: nextHeight,
   };
 }
 
-function roundToMultipleOf16(value: number) {
-  return Math.max(16, Math.round(value / 16) * 16);
+function roundDownToMultipleOf16(value: number) {
+  return Math.max(16, Math.floor(value / 16) * 16);
 }
 
 function parseControlsFromSize(size: string | undefined): { ratio: RatioValue; resolution: ResolutionValue } {

@@ -4,8 +4,7 @@ import type {
   GalleryItem,
   GenerationResult,
   GenerationTask,
-  HistoryItem,
-  QueueItem,
+  RecordsResponse,
   SessionSummary,
   StyleReferenceAnalysis,
   User,
@@ -88,9 +87,14 @@ export const api = {
     ),
   getTaskResult: (taskId: string) => request<{ result: GenerationResult }>(`/api/generation-tasks/${taskId}/result`),
   retryTask: (taskId: string) => request<{ task: GenerationTask }>(`/api/generation-tasks/${taskId}/retry`, { method: 'POST', body: JSON.stringify({}) }),
-  getQueue: () => request<{ items: QueueItem[] }>('/api/queue'),
-  streamQueue: () => new EventSource('/api/queue/events'),
-  getHistory: () => request<{ items: HistoryItem[] }>('/api/history'),
+  getRecords: (cursor: number | null = null, limit = 10) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (cursor !== null) {
+      params.set('cursor', String(cursor));
+    }
+    return request<RecordsResponse>(`/api/records?${params.toString()}`);
+  },
+  streamRecords: () => new EventSource('/api/records/events'),
   getGallery: () => request<{ items: GalleryItem[] }>('/api/gallery-items'),
   saveGallery: (generationResultId: string) =>
     request<{ item: GalleryItem }>('/api/gallery-items', { method: 'POST', body: JSON.stringify({ generationResultId }) }),

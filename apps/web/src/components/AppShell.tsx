@@ -16,9 +16,8 @@ type ShellProps = {
 
 const navItems = [
   { to: '/', label: '头像生成' },
+  { to: '/records', label: '我的记录' },
   { to: '/gallery', label: '我的图库' },
-  { to: '/queue', label: '任务队列' },
-  { to: '/history', label: '历史记录' },
   { to: '/settings', label: '账户设置' },
 ];
 
@@ -114,15 +113,16 @@ export function AppShell({ title, user, drawerOpen, installAvailable, onOpenDraw
               {item.label}
             </NavLink>
           ))}
-          <button
-            type="button"
-            className="rounded-[18px] bg-white/82 px-4 py-[14px] text-left text-[15px] text-[#2f2724] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={!installAvailable}
-            tabIndex={drawerOpen ? undefined : -1}
-            onClick={onInstallApp}
-          >
-            {installAvailable ? '添加到桌面' : '当前浏览器暂不支持安装'}
-          </button>
+          {installAvailable ? (
+            <button
+              type="button"
+              className="rounded-[18px] bg-white/82 px-4 py-[14px] text-left text-[15px] text-[#2f2724] shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_10px_24px_rgba(198,166,142,0.14)] transition duration-200 hover:-translate-y-0.5 hover:bg-white active:translate-y-0"
+              tabIndex={drawerOpen ? undefined : -1}
+              onClick={onInstallApp}
+            >
+              添加到桌面
+            </button>
+          ) : null}
         </nav>
       </aside>
 

@@ -3,17 +3,18 @@ export function cx(...classes: Array<string | false | null | undefined>) {
 }
 
 export const glassPanelClass =
-  'rounded-[28px] border border-white/60 bg-white/72 shadow-[0_20px_48px_rgba(186,198,225,0.22)] backdrop-blur-[32px]';
+  'rounded-[30px] border border-white/70 bg-[linear-gradient(145deg,rgba(255,255,255,0.82),rgba(255,248,242,0.58))] shadow-[0_24px_56px_rgba(124,105,91,0.12),0_8px_22px_rgba(186,198,225,0.18),inset_0_1px_0_rgba(255,255,255,0.86)] backdrop-blur-[34px]';
 
 export const pageStackClass = 'grid gap-[18px] pb-6';
 
-export const softCardClass = 'rounded-[22px] border border-[#807269]/10 bg-white/62 p-4';
+export const softCardClass =
+  'rounded-[24px] border border-white/72 bg-[linear-gradient(155deg,rgba(255,255,255,0.78),rgba(255,247,240,0.56))] p-4 shadow-[0_18px_42px_rgba(118,95,78,0.11),0_4px_14px_rgba(186,198,225,0.16),inset_0_1px_0_rgba(255,255,255,0.84)]';
 
 export const primaryButtonClass =
-  'inline-flex min-h-11 w-full items-center justify-center rounded-full border border-transparent bg-gradient-to-br from-[#d5ad85] via-[#c7967e] to-[#a79bc9] px-[18px] py-3 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(190,149,127,0.28)] transition duration-150 hover:brightness-[1.03] active:scale-[0.99] disabled:opacity-60';
+  'inline-flex min-h-11 w-full items-center justify-center rounded-full border border-transparent bg-gradient-to-br from-[#d5ad85] via-[#c7967e] to-[#a79bc9] px-[18px] py-3 text-sm font-semibold text-white shadow-[0_16px_34px_rgba(190,149,127,0.32),inset_0_1px_0_rgba(255,255,255,0.34)] transition duration-200 hover:-translate-y-0.5 hover:brightness-[1.04] active:translate-y-0 active:scale-[0.99] disabled:opacity-60';
 
 export const secondaryButtonClass =
-  'inline-flex min-h-11 w-full items-center justify-center rounded-full border border-[#786960]/15 bg-white/78 px-[18px] py-3 text-sm font-semibold text-[#2f2724] transition duration-150 hover:bg-white active:scale-[0.99] disabled:opacity-60';
+  'inline-flex min-h-11 w-full items-center justify-center rounded-full border border-white/68 bg-white/78 px-[18px] py-3 text-sm font-semibold text-[#2f2724] shadow-[0_10px_24px_rgba(118,95,78,0.09),inset_0_1px_0_rgba(255,255,255,0.78)] transition duration-200 hover:-translate-y-0.5 hover:bg-white active:translate-y-0 active:scale-[0.99] disabled:opacity-60';
 
 export const dangerButtonClass = `${secondaryButtonClass} text-[#b36f67]`;
 

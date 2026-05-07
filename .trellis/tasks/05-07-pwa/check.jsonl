@@ -1,0 +1,6 @@
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Check route/API wrapper/PWA/static-media constraints and web validation commands after implementation."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Check mobile shell, drawer, lightbox, regenerate, and UI styling behavior after implementation."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Check thumbnail asset storage, SQLite mapping, and queue/history/list payload compatibility after implementation."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Check API response envelopes and OpenAI/PWA/SSE contract behavior after implementation."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check the database-to-API-to-frontend records and thumbnail data flow."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Check duplicated queue/history/size logic was consolidated rather than forked."}

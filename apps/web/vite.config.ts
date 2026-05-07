@@ -8,7 +8,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const apiPort = normalizePort(process.env.PORT ?? readRootEnvValue('PORT'));
-const apiTarget = `http://localhost:${apiPort}`;
+const apiTarget = `http://127.0.0.1:${apiPort}`;
 
 export default defineConfig({
   plugins: [
@@ -17,33 +17,8 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'script-defer',
-      includeAssets: ['logo.png'],
-      manifest: {
-        name: '大宇头像',
-        short_name: '大宇头像',
-        description: '生成、收藏并设置你的个性化头像作品。',
-        lang: 'zh-CN',
-        start_url: '/',
-        scope: '/',
-        display: 'standalone',
-        orientation: 'portrait',
-        background_color: '#fdf8f6',
-        theme_color: '#cfa983',
-        icons: [
-          {
-            src: '/icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'any maskable',
-          },
-          {
-            src: '/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any maskable',
-          },
-        ],
-      },
+      includeAssets: ['logo.png', 'icon-192.png', 'icon-512.png', 'manifest.webmanifest'],
+      manifest: false,
       workbox: {
         globPatterns: ['**/*.{js,css,html,woff2}'],
         navigateFallback: '/',

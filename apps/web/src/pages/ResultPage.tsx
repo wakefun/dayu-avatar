@@ -61,7 +61,7 @@ export function ResultPage() {
           >
             <img
               className="block h-full max-h-[68vh] w-full bg-white/45 object-contain"
-              src={result.imageUrl}
+              src={result.thumbnailUrl ?? result.imageUrl}
               alt="生成头像结果"
               style={result.width && result.height ? { aspectRatio: `${result.width} / ${result.height}` } : undefined}
             />
@@ -85,11 +85,11 @@ export function ResultPage() {
           </button>
           {savedItem ? (
             <a className={secondaryButtonClass} href={`/api/gallery-items/${savedItem.id}/download`}>
-              下载
+              下载原图
             </a>
           ) : result?.imageUrl ? (
             <a className={secondaryButtonClass} href={result.imageUrl} download>
-              下载
+              下载原图
             </a>
           ) : null}
           <button
@@ -153,7 +153,7 @@ export function ResultPage() {
       <ImageLightbox
         image={
           result?.imageUrl && previewOpen
-            ? { src: result.imageUrl, alt: '生成头像结果', width: result.width, height: result.height, meta: result.createdAt ? new Date(result.createdAt).toLocaleString() : undefined }
+            ? { src: result.thumbnailUrl ?? result.imageUrl, alt: '生成头像结果', width: result.width, height: result.height, meta: result.createdAt ? new Date(result.createdAt).toLocaleString() : undefined }
             : null
         }
         onClose={() => setPreviewOpen(false)}

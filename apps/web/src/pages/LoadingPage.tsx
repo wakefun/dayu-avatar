@@ -86,15 +86,15 @@ export function LoadingPage() {
                 </button>
               ) : null}
               {error ? <div className="text-sm text-[#b36f67]">{error}</div> : null}
-              <button type="button" className={secondaryButtonClass} onClick={() => navigate('/queue')}>
-                返回任务队列
+              <button type="button" className={secondaryButtonClass} onClick={() => navigate('/records')}>
+                返回我的记录
               </button>
             </div>
           </div>
         </PageSection>
       ) : (
         <>
-          <PageSection title="正在生成头像" subtitle="当前任务仍在处理中，你可以稍后前往任务队列查看最新进度。">
+          <PageSection title="正在生成头像" subtitle="当前任务仍在处理中，你可以稍后前往我的记录查看最新进度。">
             <div className="grid justify-items-center gap-3 text-center">
               <div className="aspect-square w-[120px] rounded-full bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.92),rgba(222,230,249,0.82)_45%,rgba(244,213,191,0.78)_80%)] shadow-[inset_0_0_30px_rgba(255,255,255,0.68),0_20px_36px_rgba(203,178,160,0.28)]" />
               <strong className="text-[15px] text-[#2f2724]">{task?.progress.step ?? '排队中'}</strong>
@@ -127,8 +127,8 @@ export function LoadingPage() {
               })}
             </div>
             {error ? <div className="mt-2 text-sm text-[#b36f67]">{error}</div> : null}
-            <button type="button" className={`${secondaryButtonClass} mt-3`} onClick={() => navigate('/queue')}>
-              查看任务队列
+            <button type="button" className={`${secondaryButtonClass} mt-3`} onClick={() => navigate('/records')}>
+              查看我的记录
             </button>
           </PageSection>
         </>

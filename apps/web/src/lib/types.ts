@@ -76,31 +76,15 @@ export type GenerationResult = {
   createdAt: string;
 };
 
-export type QueueItem = {
-  id: string;
-  status: GenerationTask['status'];
-  summary: string;
-  progress: {
-    percent: number;
-    step: string | null;
-  };
-  createdAt: string;
-  resultUrl: string | null;
-  errorMessage: string | null;
-};
-
 export type TaskStreamPayload = {
   task: GenerationTask;
 };
 
-export type QueueStreamPayload = {
-  items: QueueItem[];
-};
-
-export type HistoryItem = {
+export type RecordItem = {
   id: string;
   status: GenerationTask['status'];
   promptSummary: string;
+  summary: string;
   prompt: string;
   styleTags: string[];
   personalReferenceAssets: Asset[];
@@ -112,9 +96,34 @@ export type HistoryItem = {
     size: string;
     outputFormat: string;
   };
-  resultImageUrl: string | null;
+  progress: {
+    percent: number;
+    step: string | null;
+    message: string;
+  };
+  result: {
+    id: string;
+    taskId: string;
+    imageUrl: string | null;
+    thumbnailUrl: string | null;
+    width: number | null;
+    height: number | null;
+    createdAt: string;
+  } | null;
+  errorMessage: string | null;
   createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
   sourceTaskId: string | null;
+};
+
+export type RecordsResponse = {
+  items: RecordItem[];
+  pagination: {
+    limit: number;
+    nextCursor: number | null;
+    hasMore: boolean;
+  };
 };
 
 export type GalleryItem = {

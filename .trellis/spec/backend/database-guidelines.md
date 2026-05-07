@@ -44,6 +44,8 @@ db.exec('PRAGMA foreign_keys = ON');
 - `generation_tasks.style_reference_asset_ids_json` stores a JSON string array of 0-3 style reference asset ids.
 - `generation_tasks.personal_reference_asset_id` and `generation_tasks.style_reference_asset_id` remain as first-asset compatibility fields for older rows and provider fallbacks.
 - `generation_tasks.style_tags_json` stores a JSON string array.
+- `generation_results.thumbnail_asset_id` stores an optional `generated_thumbnail` file asset for the generated result preview.
+- Generated thumbnails are WebP files produced by the runtime `cwebp` binary at quality 88; configure `CWEBP_BIN` when the binary is not on `PATH`.
 - Session rows store `session_data` JSON plus optional `user_id`, `auth_mode`, `expires_at`, and soft-delete `deleted_at`.
 
 ### 4. Validation & Error Matrix
@@ -62,16 +64,18 @@ db.exec('PRAGMA foreign_keys = ON');
 - Good: create upload asset row and write file under `data/uploads/<category>/<yyyy>/<mm>/...`, exposing `/static/uploads/...`.
 - Good: persist every personal/style reference asset id in the JSON array columns while also copying the first asset into the legacy single-id columns.
 - Base: old rows that only have `personal_reference_asset_id` / `style_reference_asset_id` still map back to frontend arrays via backend fallback logic.
-- Base: mock generation inserts one `generation_tasks` row, then a `generation_results` row when status reaches `completed`.
+- Base: mock generation inserts one `generation_tasks` row, creates a generated result plus WebP thumbnail, then marks the task `completed`.
+- Bad: do not mark a task `completed` before result and thumbnail persistence succeeds.
 - Bad: do not replace multi-reference storage with comma-joined text or drop the legacy single-id fields without a real migration.
 - Bad: do not serve the whole `data/` directory statically; that can expose `data/app.db`.
 
 ### 6. Tests Required
 
 - Typecheck must pass for all SQLite calls.
-- Runtime smoke test should create a mock login, upload both reference categories, create a generation task, poll completion, save a result to gallery, and verify queue/history/gallery lists include the data.
-- Add a multi-reference smoke path that uploads at least 2 personal references and 1 style reference, then asserts the task/history payload still returns all assets in order.
+- Runtime smoke test should create a mock login, upload both reference categories, create a generation task, poll completion, save a result to gallery, and verify records/gallery lists include the data.
+- Add a multi-reference smoke path that uploads at least 2 personal references and 1 style reference, then asserts the task/records payload still returns all assets in order.
 - Add a legacy-row compatibility assertion that a task without `*_asset_ids_json` still returns one-element arrays from the API.
+- Add a generated-result smoke assertion that `generation_results.thumbnail_asset_id` points to a `generated_thumbnail` WebP asset.
 - Static file smoke test should confirm generated/uploaded image URLs resolve with private/no-referrer/nosniff headers while `data/app.db` is not publicly exposed.
 
 ### 7. Wrong vs Correct

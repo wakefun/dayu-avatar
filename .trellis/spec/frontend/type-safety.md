@@ -4,11 +4,11 @@
 
 ---
 
-## Scenario: Frontend task/history/gallery contracts
+## Scenario: Frontend generation records contracts
 
 ### 1. Scope / Trigger
 
-- Trigger: any frontend work that consumes generation task, queue, history, gallery, or user-avatar APIs.
+- Trigger: any frontend work that consumes generation task, records, gallery, or user-avatar APIs.
 - This app keeps API boundary types in `apps/web/src/lib/types.ts` and request helpers in `apps/web/src/lib/api.ts`.
 
 ### 2. Signatures
@@ -63,7 +63,9 @@ api.createTask({
 - Frontend requests style-reference analysis through `api.analyzeStyleReferences(assetIds)` whenever uploaded style references change, then sends the returned `StyleReferenceAnalysis` to task creation.
 - Frontend treats `StyleReferenceAnalysis.tags` as display/title context only; it must not auto-insert those tags or generated snippets into the custom prompt textarea.
 - Frontend reads `promptSummary`/`summary` from API payloads instead of truncating raw prompts locally for cards.
-- History items must carry `prompt`, `styleTags`, `personalReferenceAssets`, `styleReferenceAssets`, and `generationParams` so navigation state can prefill the generation page.
+- Records items must carry `prompt`, `styleTags`, `personalReferenceAssets`, `styleReferenceAssets`, and `generationParams` so navigation state can prefill the generation page.
+- Records responses must include `pagination.nextCursor` and active terminal status data; the records page merges the SSE first page with paged results instead of choosing between queue and history shapes.
+- Result/gallery/records image payloads should carry both `thumbnailUrl` and `imageUrl` when available; UI previews prefer `thumbnailUrl`, while download actions use `imageUrl`.
 - Result routes must fetch task status before fetching `/result`; queued/processing tasks redirect to loading, and failed/canceled tasks show terminal copy instead of claiming a result is ready.
 - Gallery items must carry `width` and `height` so masonry cards and fullscreen preview preserve image aspect ratio.
 - `api.setAvatarFromGallery(galleryItemId)` returns `{ user }`; callers should refresh topbar/settings avatar from that response rather than guessing the URL.
@@ -80,6 +82,7 @@ api.createTask({
 ### 5. Good/Base/Bad Cases
 
 - Good: `GeneratePage` stores `StyleReferenceAnalysis | null`, clears stale analysis while loading, and passes the exact object into `api.createTask`.
+- Good: `RecordsPage` consumes `RecordsResponse`, renders queued/processing/completed/failed/canceled items together, and paginates with `nextCursor`.
 - Good: `GalleryPage` uses server-provided image dimensions rather than hard-coded portrait ratios.
 - Base: image preview components accept nullable dimensions and degrade to CSS defaults when missing.
 - Bad: building queue/history summary text from raw prompt in the component layer.

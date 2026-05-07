@@ -36,10 +36,11 @@
 - Workbox navigation fallback must use `/` only for navigation requests; built Vite assets under `/assets/` may use cache-first behavior but must never receive cached HTML as a fallback.
 - Workbox runtime caching must not include `/static/uploads/**` or `/static/generated/**` user media.
 - `manifest.webmanifest` must reference explicit 192x192 and 512x512 PNG icon assets in `public/`.
-- `vite.config.ts` dev proxy should derive the API target from root `PORT` env/default `3001`, matching the API startup contract.
+- `vite.config.ts` dev proxy should derive the API target from root `PORT` env/default `3001`, matching the API startup contract, and should target `127.0.0.1` rather than `localhost` to avoid loopback/proxy ambiguity in local smoke tests.
 
 ### 4. Validation & Error Matrix
 
+- Dev proxy smoke -> when shell proxy variables are set, use `curl --noproxy '*'` for `localhost`/`127.0.0.1` checks before diagnosing Vite or API routing failures.
 - New route -> add route entry in `App.tsx` and navigation entry in the shell when global navigation is needed.
 - New API call -> add typed function in `src/lib/api.ts` and matching type in `src/lib/types.ts`.
 - New Vite env usage -> ensure `vite-env.d.ts` remains present.
