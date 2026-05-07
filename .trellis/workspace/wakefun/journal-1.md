@@ -203,3 +203,36 @@ Implemented style reference image analysis display, replaced tag auto-fill with 
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: Unify records and PWA fixes
+
+**Date**: 2026-05-07
+**Task**: Unify records and PWA fixes
+**Branch**: `main`
+
+### Summary
+
+Merged queue and history into paginated records, fixed 3:4 4K sizing and PWA install state, added cwebp WebP thumbnails, refreshed UI depth, and updated Trellis specs.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d8b8556` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
