@@ -38,3 +38,37 @@
 ### Next Steps
 
 - None - task complete
+
+
+## Session 2: Optimize generation titles and split API
+
+**Date**: 2026-05-08
+**Task**: Optimize generation titles and split API
+**Branch**: `main`
+
+### Summary
+
+Moved OpenAI-compatible generation to AI SDK, generated task titles after planned image prompts, added prompt-planning priority options, and split the API entrypoint into focused modules.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cefac49` | (see git log) |
+| `5d01cd5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
