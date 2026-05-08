@@ -1,0 +1,7 @@
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Frontend app structure and API/type boundary conventions for the generation form refactor."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Mobile UI conventions, upload card behavior, generation controls, and existing style-analysis contract to update intentionally."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Typed frontend API contracts and reference asset payload expectations across generation/history/result flows."}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Backend Express service structure and guidance on keeping MVP orchestration compact."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"API error envelope, upload validation, OpenAI-compatible generation contracts, and required verification commands."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Feature spans frontend, API, task persistence, and provider calls; use to keep data contracts explicit."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Avoid duplicating existing upload, ratio, prompt, and generation orchestration helpers during the refactor."}

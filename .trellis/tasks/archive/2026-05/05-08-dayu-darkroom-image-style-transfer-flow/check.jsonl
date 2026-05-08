@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Verify the new Darkroom UI follows mobile art-gallery conventions and intentionally removes upload-time style analysis."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Check typed API payloads and history/result round-trip data for source/reference assets and generation params."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Check API validation/error behavior, OpenAI-compatible generation path, and required lint/type/build commands."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check source/reference/text/ratio data survives the frontend-backend-provider-result flow consistently."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Check the implementation reuses existing helpers and avoids duplicated ratio/prompt/upload logic."}
