@@ -8,6 +8,22 @@ import { PNG } from 'pngjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { detectImageFile, normalizeOpenAiSize, parseSize, readImageDimensions } from './image-utils';
+import {
+  analyzeStyleReferenceAssets,
+  buildFallbackTaskSummary,
+  buildImageGenerationPrompt,
+  configureOpenAiGeneration,
+  createOpenAiGenerationFailure,
+  createTaskSummary,
+  generateOpenAiImage,
+  logOpenAiGenerationFailure,
+  normalizeOpenAiBaseUrl,
+  normalizeOpenAiGenerationFailure,
+  normalizeTaskSummary,
+  type GeneratedImagePayload,
+  type ProviderTask,
+} from './openai-generation';
 import type { Request, Response, NextFunction } from 'express';
 
 declare module 'express-session' {
@@ -147,62 +163,6 @@ type OidcIdTokenClaims = {
   email?: unknown;
 };
 
-type OpenAiErrorPayload = {
-  code?: string | null;
-  type?: string | null;
-  message?: string | null;
-};
-
-type OpenAiImageData = {
-  b64_json?: string;
-  url?: string;
-};
-
-type OpenAiImagesResponse = {
-  data?: OpenAiImageData[];
-  error?: OpenAiErrorPayload;
-};
-
-type OpenAiChatResponse = {
-  choices?: Array<{
-    message?: {
-      content?: string | Array<{ type?: string; text?: string }>;
-    };
-  }>;
-  error?: OpenAiErrorPayload;
-};
-
-type StyleReferenceAnalysis = {
-  tags: string[];
-  description: string;
-};
-
-type OpenAiEditRequestVariant = {
-  files: Array<{
-    buffer: Buffer;
-    mimeType: string;
-    fileName: string;
-  }>;
-  fields: Record<string, string>;
-};
-
-type OpenAiGenerationFailure = {
-  status: number | null;
-  providerCode: string | null;
-  providerType: string | null;
-  providerMessage: string | null;
-  internalCode: string;
-  taskMessage: string;
-};
-
-type GeneratedImagePayload = {
-  buffer: Buffer;
-  mimeType: string;
-  extension: string;
-  width: number;
-  height: number;
-};
-
 const apiRoot = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(apiRoot, '../..');
 loadEnvFile(path.join(repoRoot, '.env'));
@@ -231,6 +191,18 @@ const oidcClientId = process.env.OIDC_CLIENT_ID ?? '';
 const oidcClientSecret = process.env.OIDC_CLIENT_SECRET ?? '';
 const oidcRedirectUri = process.env.OIDC_REDIRECT_URI ?? '';
 const oidcPostLogoutRedirectUri = process.env.OIDC_POST_LOGOUT_REDIRECT_URI ?? '';
+configureOpenAiGeneration({
+  apiKey: openAiApiKey,
+  baseUrl: openAiBaseUrl,
+  promptModel: defaultPromptModel,
+  imageModel: defaultImageModel,
+  imageQuality: defaultImageQuality,
+  requestTimeoutMs: openAiRequestTimeoutMs,
+  dataRoot,
+  cwebpBin,
+  getAsset,
+  getTaskReferenceAssetIds: getProviderTaskReferenceAssetIds,
+});
 const generationRuns = new Map<string, Promise<void>>();
 let oidcDiscoveryPromise: Promise<OidcDiscoveryDocument> | null = null;
 let oidcJwksPromise: Promise<OidcJwk[]> | null = null;
@@ -609,7 +581,7 @@ app.post('/api/generation-tasks', requireAuth, async (req, res, next) => {
     const size = normalizeOpenAiSize(typeof generationParams.size === 'string' ? generationParams.size : '1024x1536');
     const outputFormat = typeof generationParams.outputFormat === 'string' ? generationParams.outputFormat : 'png';
     const styleTags: string[] = [];
-    const summary = await createTaskSummary({
+    const summary = buildFallbackTaskSummary({
       prompt,
       personalReferenceCount: personalReferenceAssetIds.length,
       styleReferenceCount: styleReferenceAssetIds.length,
@@ -1416,202 +1388,19 @@ function normalizeAssetIdList(value: unknown, fallback: unknown, maxCount: numbe
   return rawValues.filter((assetId): assetId is string => typeof assetId === 'string' && assetId.trim().length > 0).slice(0, maxCount);
 }
 
-function normalizeStyleReferenceAnalysis(value: unknown): StyleReferenceAnalysis | null {
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-
-  const input = value as Partial<StyleReferenceAnalysis>;
-  const tags = Array.isArray(input.tags)
-    ? input.tags
-        .filter((tag): tag is string => typeof tag === 'string' && tag.trim().length > 0)
-        .map((tag) => tag.trim().slice(0, 12))
-        .filter((tag, index, values) => values.indexOf(tag) === index)
-        .slice(0, 6)
-    : [];
-  const description = typeof input.description === 'string' ? input.description.trim().slice(0, 80) : '';
-
-  if (tags.length === 0 || !description) {
-    return null;
-  }
-
-  return {
-    tags,
-    description,
-  };
-}
-
-async function analyzeStyleReferenceAssets(assets: AssetRow[]): Promise<StyleReferenceAnalysis> {
-  const fallback = buildFallbackStyleReferenceAnalysis(assets.length);
-  if (!openAiApiKey || !openAiBaseUrl) {
-    return fallback;
-  }
-
+async function updateTaskSummaryFromPlannedPrompt(task: TaskRow, plannedPrompt: string) {
   try {
-    const response = await fetch(buildOpenAiChatCompletionsUrl(openAiBaseUrl), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${openAiApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: defaultPromptModel,
-        messages: [
-          {
-            role: 'system',
-            content:
-              'Analyze avatar style reference images. Return compact JSON only: {"tags":["tag1","tag2","tag3","tag4"],"description":"short Chinese style summary"}. Tags must be 2-6 short Chinese labels. Description must be one short Chinese sentence under 60 characters covering scene, lighting, and palette.',
-          },
-          {
-            role: 'user',
-            content: buildStyleAnalysisMessage(assets),
-          },
-        ],
-      }),
-      signal: AbortSignal.timeout(Math.min(openAiRequestTimeoutMs, 30_000)),
+    const summary = await createTaskSummary({
+      prompt: task.prompt,
+      plannedPrompt,
+      personalReferenceCount: getTaskReferenceAssetIds(task, 'personal').length,
+      styleReferenceCount: getTaskReferenceAssetIds(task, 'style').length,
     });
 
-    const payload = await readOpenAiChatResponse(response);
-    if (!response.ok) {
-      return fallback;
-    }
-
-    return parseStyleReferenceAnalysis(extractPromptText(payload)) ?? fallback;
+    db.prepare('UPDATE generation_tasks SET summary = ?, updated_at = ? WHERE id = ?').run(summary, nowIso(), task.id);
   } catch {
-    return fallback;
+    console.warn('[openai-generation] task summary update failed', { taskId: task.id });
   }
-}
-
-function buildStyleAnalysisMessage(assets: AssetRow[]) {
-  return [
-    {
-      type: 'text',
-      text: [
-        `Style reference image count: ${assets.length}`,
-        'Extract only the visible style language: scene, lighting, color palette, composition, medium, texture, and atmosphere.',
-        'Do not identify people or copy identity from the reference images.',
-      ].join('\n'),
-    },
-    ...assets.map((asset) => ({
-      type: 'image_url',
-      image_url: {
-        url: buildAssetDataUrl(asset),
-      },
-    })),
-  ];
-}
-
-function parseStyleReferenceAnalysis(value: string): StyleReferenceAnalysis | null {
-  const jsonText = extractJsonObjectText(value);
-  if (!jsonText) {
-    return null;
-  }
-
-  try {
-    return normalizeStyleReferenceAnalysis(JSON.parse(jsonText));
-  } catch {
-    return null;
-  }
-}
-
-function extractJsonObjectText(value: string) {
-  const start = value.indexOf('{');
-  const end = value.lastIndexOf('}');
-  if (start < 0 || end <= start) {
-    return '';
-  }
-  return value.slice(start, end + 1);
-}
-
-function buildFallbackStyleReferenceAnalysis(count: number): StyleReferenceAnalysis {
-  return {
-    tags: count > 1 ? ['主图场景', '参考风格', '光影配色'] : ['参考构图', '风格还原', '光影配色'],
-    description: count > 1 ? '以主图场景为核心，融合参考图的光影、配色与质感。' : '提取参考图的场景、打光、配色与构图用于风格还原。',
-  };
-}
-
-
-async function createTaskSummary(input: { prompt: string; personalReferenceCount: number; styleReferenceCount: number }) {
-  const fallback = buildFallbackTaskSummary(input);
-  if (!openAiApiKey || !openAiBaseUrl) {
-    return fallback;
-  }
-
-  try {
-    const response = await fetch(buildOpenAiChatCompletionsUrl(openAiBaseUrl), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${openAiApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: defaultPromptModel,
-        messages: [
-          {
-            role: 'system',
-            content: [
-              'Return one short Chinese title for an image generation task.',
-              'Describe concrete task characteristics only: user request, subject, visual style, scene, source presence, or reference presence.',
-              'Use 6 to 14 Chinese characters.',
-              'No markdown, punctuation, quotes, or explanation.',
-            ].join(' '),
-          },
-          {
-            role: 'user',
-            content: buildTaskSummaryContext(input),
-          },
-        ],
-      }),
-      signal: AbortSignal.timeout(Math.min(openAiRequestTimeoutMs, 20_000)),
-    });
-
-    const payload = await readOpenAiChatResponse(response);
-    if (!response.ok) {
-      return fallback;
-    }
-
-    return normalizeTaskSummary(extractPromptText(payload)) || fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function buildTaskSummaryContext(input: { prompt: string; personalReferenceCount: number; styleReferenceCount: number }) {
-  const lines = [`User requirements: ${input.prompt || '未填写'}`];
-  if (input.personalReferenceCount > 0) {
-    lines.push(`Source images: ${input.personalReferenceCount}`);
-  }
-  if (input.styleReferenceCount > 0) {
-    lines.push(`Reference images: ${input.styleReferenceCount}`);
-  }
-  lines.push('Title focus: summarize the user request, subject, visual style, scene, and image-reference composition when useful.');
-  return lines.join('\n');
-}
-
-function buildFallbackTaskSummary(input: { prompt: string; personalReferenceCount: number; styleReferenceCount: number }) {
-  const normalized = normalizeTaskSummary(input.prompt.trim());
-  if (normalized) {
-    return normalized;
-  }
-
-  if (input.personalReferenceCount > 0 && input.styleReferenceCount > 0) {
-    return '原图参考创作';
-  }
-  if (input.styleReferenceCount > 0) {
-    return '参考图创作';
-  }
-  if (input.personalReferenceCount > 0) {
-    return '原图创作';
-  }
-  return '文字创意生成';
-}
-
-function normalizeTaskSummary(value: string) {
-  return value
-    .replace(/[\r\n]+/g, ' ')
-    .replace(/\s+/g, '')
-    .replace(/[^\p{L}\p{N}]/gu, '')
-    .slice(0, 14);
 }
 
 
@@ -1902,7 +1691,9 @@ async function runOpenAiGeneration(taskId: string) {
   }
 
   try {
-    const generated = await generateOpenAiImage(latestTask);
+    const plannedPrompt = await buildImageGenerationPrompt(latestTask);
+    await updateTaskSummaryFromPlannedPrompt(latestTask, plannedPrompt);
+    const generated = await generateOpenAiImage(latestTask, plannedPrompt);
     await persistGeneratedResult(latestTask, generated);
     db.prepare(
       "UPDATE generation_tasks SET status = 'completed', progress_percent = 100, progress_step = '生成完成', error_code = NULL, error_message = NULL, updated_at = ?, completed_at = ? WHERE id = ?"
@@ -1914,386 +1705,6 @@ async function runOpenAiGeneration(taskId: string) {
       "UPDATE generation_tasks SET status = 'failed', progress_percent = 96, progress_step = '高清细化中', error_code = 'GENERATION_FAILED', error_message = ?, updated_at = ? WHERE id = ?"
     ).run(failure.taskMessage, nowIso(), taskId);
   }
-}
-
-async function generateOpenAiImage(task: TaskRow): Promise<GeneratedImagePayload> {
-  ensureOpenAiConfigured();
-  const [width, height] = parseSize(task.size);
-  const plannedPrompt = await buildImageGenerationPrompt(task);
-  const requestVariants = buildOpenAiImageRequestVariants(task, plannedPrompt);
-
-  for (const variant of requestVariants) {
-    const requestUrl = variant.files.length > 0 ? buildOpenAiImageEditsUrl(openAiBaseUrl) : buildOpenAiImageGenerationsUrl(openAiBaseUrl);
-    const requestBody = buildOpenAiImageRequestBody(variant);
-
-    const response = await fetch(requestUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${openAiApiKey}`,
-        ...requestBody.headers,
-      },
-      body: requestBody.body,
-      signal: AbortSignal.timeout(openAiRequestTimeoutMs),
-    });
-
-    const payload = await readOpenAiResponse(response);
-
-    if (!response.ok) {
-      if (response.status === 400 && variant !== requestVariants[requestVariants.length - 1]) {
-        continue;
-      }
-      throw extractOpenAiFailureFromResponse(response.status, payload);
-    }
-
-    const first = Array.isArray(payload.data) ? payload.data[0] : null;
-    if (!first || typeof first !== 'object') {
-      throw createOpenAiGenerationFailure({
-        status: response.status,
-        providerCode: payload.error?.code ?? null,
-        providerType: payload.error?.type ?? null,
-        providerMessage: payload.error?.message ?? 'No image data returned',
-        internalCode: 'OPENAI_INVALID_RESPONSE',
-        taskMessage: '生成服务返回了无法识别的图片结果。',
-      });
-    }
-
-    if (typeof first.b64_json === 'string') {
-      if (!first.b64_json) {
-        throw createOpenAiGenerationFailure({
-          status: response.status,
-          providerCode: payload.error?.code ?? null,
-          providerType: payload.error?.type ?? null,
-          providerMessage: 'Image response contained empty b64_json data',
-          internalCode: 'OPENAI_INVALID_RESPONSE',
-          taskMessage: '生成服务返回了空的图片数据。',
-        });
-      }
-
-      const buffer = Buffer.from(first.b64_json, 'base64');
-      if (buffer.byteLength === 0) {
-        throw createOpenAiGenerationFailure({
-          status: response.status,
-          providerCode: payload.error?.code ?? null,
-          providerType: payload.error?.type ?? null,
-          providerMessage: 'Image response contained empty b64_json data',
-          internalCode: 'OPENAI_INVALID_RESPONSE',
-          taskMessage: '生成服务返回了空的图片数据。',
-        });
-      }
-
-      const file = detectImageFile(buffer);
-      if (!file) {
-        throw createOpenAiGenerationFailure({
-          status: response.status,
-          providerCode: payload.error?.code ?? null,
-          providerType: payload.error?.type ?? null,
-          providerMessage: 'Image response b64_json format could not be detected',
-          internalCode: 'OPENAI_INVALID_RESPONSE',
-          taskMessage: '生成服务返回了无法识别的图片格式。',
-        });
-      }
-
-      return {
-        buffer,
-        mimeType: file.mimeType,
-        extension: file.extension,
-        width,
-        height,
-      };
-    }
-
-    if (typeof first.url === 'string' && first.url) {
-      return downloadOpenAiImage(first.url, response.status, width, height);
-    }
-
-    throw createOpenAiGenerationFailure({
-      status: response.status,
-      providerCode: payload.error?.code ?? null,
-      providerType: payload.error?.type ?? null,
-      providerMessage: 'Image response did not include b64_json or url',
-      internalCode: 'OPENAI_INVALID_RESPONSE',
-      taskMessage: '生成服务返回了无法识别的图片结果。',
-    });
-  }
-
-  throw createOpenAiGenerationFailure({
-    status: 400,
-    providerCode: null,
-    providerType: null,
-    providerMessage: 'All OpenAI request variants were rejected with HTTP 400',
-    internalCode: 'OPENAI_BAD_REQUEST',
-    taskMessage: '生成请求被服务拒绝，请检查模型或参数配置。',
-  });
-}
-
-function buildOpenAiImageRequestBody(variant: OpenAiEditRequestVariant): { body: BodyInit; headers: Record<string, string> } {
-  if (variant.files.length === 0) {
-    return {
-      body: JSON.stringify(variant.fields),
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    };
-  }
-
-  const formData = new FormData();
-  for (const file of variant.files) {
-    formData.append('image', new Blob([toArrayBuffer(file.buffer)], { type: file.mimeType }), file.fileName);
-  }
-  for (const [key, value] of Object.entries(variant.fields)) {
-    formData.append(key, value);
-  }
-  return {
-    body: formData,
-    headers: {},
-  };
-}
-
-function buildOpenAiImageRequestVariants(task: TaskRow, prompt: string): OpenAiEditRequestVariant[] {
-  const sourceAssets = getTaskReferenceAssetIds(task, 'personal')
-    .map((assetId) => getAsset(assetId))
-    .filter((asset): asset is AssetRow => Boolean(asset));
-  const referenceAssets = getTaskReferenceAssetIds(task, 'style')
-    .map((assetId) => getAsset(assetId))
-    .filter((asset): asset is AssetRow => Boolean(asset));
-  const outputFormat = normalizeOutputFormat(task.output_format);
-  const baseFields = {
-    model: task.model || defaultImageModel,
-    prompt,
-    size: normalizeOpenAiSize(task.size),
-  } satisfies Record<string, string>;
-  const withQualityAndFormat = {
-    ...baseFields,
-    quality: task.quality || defaultImageQuality,
-    output_format: outputFormat,
-    response_format: 'b64_json',
-  };
-  const withFormatOnly = {
-    ...baseFields,
-    quality: task.quality || defaultImageQuality,
-    output_format: outputFormat,
-  };
-  const minimalFields = {
-    ...baseFields,
-    quality: task.quality || defaultImageQuality,
-  };
-  const sourceFiles = sourceAssets.map((asset, index) => toOpenAiImageFile(asset, `source-image-${index + 1}`));
-  const referenceFiles = referenceAssets.map((asset, index) => toOpenAiImageFile(asset, `reference-image-${index + 1}`));
-  const filesWithReferenceFirst = [...referenceFiles, ...sourceFiles];
-  const fieldVariants = [withQualityAndFormat, withFormatOnly, minimalFields];
-
-  if (filesWithReferenceFirst.length === 0) {
-    return fieldVariants.map((fields) => ({ files: [], fields }));
-  }
-
-  return fieldVariants.map((fields) => ({ files: filesWithReferenceFirst, fields }));
-}
-
-async function buildImageGenerationPrompt(task: TaskRow) {
-  const sourceAssets = getTaskReferenceAssetIds(task, 'personal')
-    .map((assetId) => getAsset(assetId))
-    .filter((asset): asset is AssetRow => Boolean(asset));
-  const referenceAssets = getTaskReferenceAssetIds(task, 'style')
-    .map((assetId) => getAsset(assetId))
-    .filter((asset): asset is AssetRow => Boolean(asset));
-  const userPrompt = task.prompt.trim();
-
-  if (sourceAssets.length === 0 && referenceAssets.length === 0) {
-    return userPrompt;
-  }
-
-  return createPlannedImagePrompt({
-    userPrompt,
-    sourceAssets,
-    referenceAssets,
-    size: normalizeOpenAiSize(task.size),
-  });
-}
-
-async function createPlannedImagePrompt(input: { userPrompt: string; sourceAssets: AssetRow[]; referenceAssets: AssetRow[]; size: string }) {
-  const fallback = buildFallbackPlannedImagePrompt(input);
-  if (!openAiApiKey || !openAiBaseUrl) {
-    return fallback;
-  }
-
-  try {
-    const response = await fetch(buildOpenAiChatCompletionsUrl(openAiBaseUrl), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${openAiApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: defaultPromptModel,
-        messages: [
-          {
-            role: 'system',
-            content: [
-              'You are the prompt planner for 大宇暗房, an image creation studio.',
-              'Given role-labeled uploaded images and optional user requirements, infer the desired final image and return one production-ready image generation prompt.',
-              'User custom requirements have the highest priority. If they conflict with image-derived guidance, follow the user requirements first.',
-              'Do not mention that you are analyzing images. Return only the final prompt, no markdown or explanation.',
-            ].join(' '),
-          },
-          {
-            role: 'user',
-            content: buildPromptPlanningMessage(input),
-          },
-        ],
-      }),
-      signal: AbortSignal.timeout(Math.min(openAiRequestTimeoutMs, 60_000)),
-    });
-
-    const payload = await readOpenAiChatResponse(response);
-    if (!response.ok) {
-      return fallback;
-    }
-
-    return normalizePlannedImagePrompt(extractPromptText(payload)) || fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function buildPromptPlanningMessage(input: { userPrompt: string; sourceAssets: AssetRow[]; referenceAssets: AssetRow[]; size: string }) {
-  return [
-    {
-      type: 'text',
-      text: [
-        `User custom requirements (highest priority): ${input.userPrompt || 'None'}`,
-        `Source image count: ${input.sourceAssets.length}. Source images provide subject, identity, object, and feature information to preserve when relevant.`,
-        `Reference image count: ${input.referenceAssets.length}. Reference images provide style, scene, composition, medium, lighting, palette, mood, and visual language.`,
-        `Requested output size: ${input.size}.`,
-        'If source and reference images are both present, preserve the source subject/features while recreating the reference style/scene/visual language. Never copy identity from reference images.',
-      ].join('\n'),
-    },
-    ...input.sourceAssets.flatMap((asset, index) => [
-      {
-        type: 'text',
-        text: `Source image ${index + 1}: extract and preserve the subject/features from this image as applicable.`,
-      },
-      {
-        type: 'image_url',
-        image_url: {
-          url: buildAssetDataUrl(asset),
-        },
-      },
-    ]),
-    ...input.referenceAssets.flatMap((asset, index) => [
-      {
-        type: 'text',
-        text: `Reference image ${index + 1}: extract style, scene, composition, lighting, palette, medium, texture, and mood from this image.`,
-      },
-      {
-        type: 'image_url',
-        image_url: {
-          url: buildAssetDataUrl(asset),
-        },
-      },
-    ]),
-  ];
-}
-
-function buildFallbackPlannedImagePrompt(input: { userPrompt: string; sourceAssets: AssetRow[]; referenceAssets: AssetRow[]; size: string }) {
-  const lines = [
-    'Create one refined image for 大宇暗房.',
-    'Produce a polished, coherent, high-quality final image with strong composition, clear subject, intentional lighting, and tasteful color design.',
-  ];
-
-  if (input.sourceAssets.length > 0) {
-    lines.push('Use the uploaded source image(s) to preserve the main subject, identity, object features, shape language, and recognizable details where relevant.');
-  }
-  if (input.referenceAssets.length === 1) {
-    lines.push('Use the uploaded reference image to recreate its style, scene, composition, lighting, color palette, texture, medium, and mood.');
-  } else if (input.referenceAssets.length > 1) {
-    lines.push('Use reference image 1 as the main scene/composition reference, and use later reference images as secondary cues for palette, texture, rendering medium, mood, and details.');
-  }
-  if (input.userPrompt) {
-    lines.push(`Highest priority user requirements: ${input.userPrompt}`);
-    lines.push('If any instruction conflicts, follow the user requirements first, then source preservation, then reference style guidance.');
-  }
-  lines.push(`Requested output size: ${input.size}.`);
-  return lines.join('\n\n');
-}
-
-function normalizePlannedImagePrompt(value: string) {
-  return value
-    .replace(/^```[a-z]*\s*/i, '')
-    .replace(/```$/g, '')
-    .trim()
-    .slice(0, 4000);
-}
-
-function buildOpenAiApiUrl(baseUrl: string, endpointPath: string) {
-  const url = new URL(baseUrl);
-  const normalizedPath = url.pathname.replace(/\/+$/, '');
-
-  if (normalizedPath.endsWith(endpointPath)) {
-    return url.toString();
-  }
-
-  if (normalizedPath.endsWith('/v1')) {
-    url.pathname = `${normalizedPath}${endpointPath.slice(3)}`;
-    return url.toString();
-  }
-
-  url.pathname = `${normalizedPath}/v1${endpointPath.slice(3)}`.replace(/\/+/g, '/');
-  return url.toString();
-}
-
-function buildOpenAiImageEditsUrl(baseUrl: string) {
-  return buildOpenAiApiUrl(baseUrl, '/v1/images/edits');
-}
-
-function buildOpenAiImageGenerationsUrl(baseUrl: string) {
-  return buildOpenAiApiUrl(baseUrl, '/v1/images/generations');
-}
-
-function buildOpenAiChatCompletionsUrl(baseUrl: string) {
-  return buildOpenAiApiUrl(baseUrl, '/v1/chat/completions');
-}
-
-function buildAssetDataUrl(asset: AssetRow) {
-  const absolutePath = path.join(dataRoot, asset.storage_path);
-  const buffer = fs.readFileSync(absolutePath);
-  const mimeType = asset.mime_type || 'application/octet-stream';
-  return `data:${mimeType};base64,${buffer.toString('base64')}`;
-}
-
-async function readOpenAiChatResponse(response: globalThis.Response): Promise<OpenAiChatResponse> {
-  const text = await response.text();
-  if (!text) {
-    return {};
-  }
-
-  try {
-    return JSON.parse(text) as OpenAiChatResponse;
-  } catch {
-    throw createOpenAiGenerationFailure({
-      status: response.status,
-      providerCode: null,
-      providerType: null,
-      providerMessage: `Non-JSON response: ${truncateForLog(text, 240)}`,
-      internalCode: 'OPENAI_INVALID_JSON',
-      taskMessage: '生成服务返回了无法解析的响应。',
-    });
-  }
-}
-
-function extractPromptText(payload: OpenAiChatResponse) {
-  const content = payload.choices?.[0]?.message?.content;
-  if (typeof content === 'string') {
-    return content.trim();
-  }
-  if (!Array.isArray(content)) {
-    return '';
-  }
-  return content
-    .filter((part) => part.type === 'text' && typeof part.text === 'string')
-    .map((part) => part.text?.trim() ?? '')
-    .filter(Boolean)
-    .join('\n')
-    .trim();
 }
 
 async function persistGeneratedResult(task: TaskRow, image: GeneratedImagePayload) {
@@ -2333,7 +1744,7 @@ async function persistGeneratedResult(task: TaskRow, image: GeneratedImagePayloa
       status: null,
       providerCode: null,
       providerType: null,
-      providerMessage: error instanceof Error ? truncateForLog(error.message, 200) : null,
+      providerMessage: error instanceof Error ? error.message.slice(0, 200) : null,
       internalCode: 'CWEBP_THUMBNAIL_FAILED',
       taskMessage: '缩略图生成失败，请检查 cwebp 是否已正确安装。',
     });
@@ -2679,6 +2090,10 @@ function getTaskReferenceAssets(task: TaskRow, type: 'personal' | 'style') {
     .map((assetId) => getAsset(assetId))
     .filter((asset): asset is AssetRow => Boolean(asset))
     .map(mapAsset);
+}
+
+function getProviderTaskReferenceAssetIds(task: ProviderTask, type: 'personal' | 'style') {
+  return getTaskReferenceAssetIds(task as TaskRow, type);
 }
 
 function parseStoredAssetIds(assetIdsJson: string | null, fallback: string | null) {
@@ -3051,30 +2466,6 @@ function ensureOidcConfigured() {
   }
 }
 
-function ensureOpenAiConfigured() {
-  if (!openAiApiKey) {
-    throw createOpenAiGenerationFailure({
-      status: null,
-      providerCode: null,
-      providerType: null,
-      providerMessage: null,
-      internalCode: 'OPENAI_CONFIG_MISSING_API_KEY',
-      taskMessage: '生成服务配置不完整，请检查 OPENAI_API_KEY。',
-    });
-  }
-
-  if (!openAiBaseUrl) {
-    throw createOpenAiGenerationFailure({
-      status: null,
-      providerCode: null,
-      providerType: null,
-      providerMessage: null,
-      internalCode: 'OPENAI_CONFIG_MISSING_BASE_URL',
-      taskMessage: '生成服务配置不完整，请检查 OPENAI_BASE_URL。',
-    });
-  }
-}
-
 function createPkceChallenge(verifier: string) {
   return crypto.createHash('sha256').update(verifier).digest('base64url');
 }
@@ -3092,14 +2483,6 @@ function pickFirstString(...values: unknown[]) {
   return null;
 }
 
-function normalizeOpenAiBaseUrl(value: string | undefined) {
-  const normalized = value?.trim();
-  if (!normalized) {
-    return '';
-  }
-  return normalized.endsWith('/') ? normalized.slice(0, -1) : normalized;
-}
-
 function parseStoredStyleTags(styleTagsJson: string) {
   try {
     const parsed = JSON.parse(styleTagsJson) as unknown;
@@ -3110,413 +2493,6 @@ function parseStoredStyleTags(styleTagsJson: string) {
   } catch {
     return [];
   }
-}
-
-function toOpenAiImageFile(asset: AssetRow, fallbackStem: string) {
-  return {
-    buffer: createProviderRequestWebp(asset.storage_path),
-    mimeType: 'image/webp',
-    fileName: buildOpenAiUploadFilename(fallbackStem),
-  };
-}
-
-function createProviderRequestWebp(sourceStoragePath: string) {
-  try {
-    return execFileSync(cwebpBin, ['-quiet', '-q', '91', path.join(dataRoot, sourceStoragePath), '-o', '-'], {
-      maxBuffer: 20 * 1024 * 1024,
-    });
-  } catch {
-    throw createOpenAiGenerationFailure({
-      status: null,
-      providerCode: null,
-      providerType: null,
-      providerMessage: null,
-      internalCode: 'CWEBP_PROVIDER_IMAGE_FAILED',
-      taskMessage: '生成前图片压缩失败，请检查 cwebp 是否已正确安装。',
-    });
-  }
-}
-
-function buildOpenAiUploadFilename(fallbackStem: string) {
-  return `${fallbackStem}.webp`;
-}
-
-function toArrayBuffer(buffer: Buffer) {
-  return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
-}
-
-function detectImageFile(buffer: Buffer) {
-  if (isPng(buffer)) {
-    return { mimeType: 'image/png', extension: '.png' };
-  }
-  if (isJpeg(buffer)) {
-    return { mimeType: 'image/jpeg', extension: '.jpg' };
-  }
-  if (isWebp(buffer)) {
-    return { mimeType: 'image/webp', extension: '.webp' };
-  }
-
-  return null;
-}
-
-function readImageDimensions(buffer: Buffer, mimeType: string) {
-  try {
-    if (mimeType === 'image/png') {
-      return readPngDimensions(buffer);
-    }
-    if (mimeType === 'image/jpeg') {
-      return readJpegDimensions(buffer);
-    }
-    if (mimeType === 'image/webp') {
-      return readWebpDimensions(buffer);
-    }
-  } catch {
-    return null;
-  }
-  return null;
-}
-
-function readPngDimensions(buffer: Buffer) {
-  if (buffer.byteLength < 24 || !isPng(buffer)) {
-    return null;
-  }
-  const width = buffer.readUInt32BE(16);
-  const height = buffer.readUInt32BE(20);
-  return width > 0 && height > 0 ? { width, height } : null;
-}
-
-function readJpegDimensions(buffer: Buffer) {
-  if (!isJpeg(buffer)) {
-    return null;
-  }
-
-  let offset = 2;
-  while (offset + 9 < buffer.byteLength) {
-    if (buffer[offset] !== 0xff) {
-      return null;
-    }
-
-    const marker = buffer[offset + 1];
-    offset += 2;
-    if (marker === 0xd9 || marker === 0xda) {
-      return null;
-    }
-    if (marker >= 0xd0 && marker <= 0xd7) {
-      continue;
-    }
-
-    const length = buffer.readUInt16BE(offset);
-    if (length < 2 || offset + length > buffer.byteLength) {
-      return null;
-    }
-    if (isJpegStartOfFrameMarker(marker)) {
-      const height = buffer.readUInt16BE(offset + 3);
-      const width = buffer.readUInt16BE(offset + 5);
-      return width > 0 && height > 0 ? { width, height } : null;
-    }
-    offset += length;
-  }
-
-  return null;
-}
-
-function isJpegStartOfFrameMarker(marker: number) {
-  return (
-    (marker >= 0xc0 && marker <= 0xc3) ||
-    (marker >= 0xc5 && marker <= 0xc7) ||
-    (marker >= 0xc9 && marker <= 0xcb) ||
-    (marker >= 0xcd && marker <= 0xcf)
-  );
-}
-
-function readWebpDimensions(buffer: Buffer) {
-  if (buffer.byteLength < 16 || !isWebp(buffer)) {
-    return null;
-  }
-
-  const chunkType = buffer.toString('ascii', 12, 16);
-  if (chunkType === 'VP8 ' && buffer.byteLength >= 30) {
-    const width = buffer.readUInt16LE(26) & 0x3fff;
-    const height = buffer.readUInt16LE(28) & 0x3fff;
-    return width > 0 && height > 0 ? { width, height } : null;
-  }
-  if (chunkType === 'VP8L' && buffer.byteLength >= 25) {
-    const bits = buffer.readUInt32LE(21);
-    const width = (bits & 0x3fff) + 1;
-    const height = ((bits >> 14) & 0x3fff) + 1;
-    return { width, height };
-  }
-  if (chunkType === 'VP8X' && buffer.byteLength >= 30) {
-    const width = 1 + buffer.readUIntLE(24, 3);
-    const height = 1 + buffer.readUIntLE(27, 3);
-    return { width, height };
-  }
-
-  return null;
-}
-
-function normalizeOutputFormat(format: string): 'png' | 'jpeg' | 'webp' {
-  if (format === 'jpeg' || format === 'jpg') {
-    return 'jpeg';
-  }
-  if (format === 'webp') {
-    return 'webp';
-  }
-  return 'png';
-}
-
-async function readOpenAiResponse(response: globalThis.Response): Promise<OpenAiImagesResponse> {
-  const text = await response.text();
-  if (!text) {
-    return {};
-  }
-
-  try {
-    return JSON.parse(text) as OpenAiImagesResponse;
-  } catch {
-    throw createOpenAiGenerationFailure({
-      status: response.status,
-      providerCode: null,
-      providerType: null,
-      providerMessage: `Non-JSON response: ${truncateForLog(text, 240)}`,
-      internalCode: 'OPENAI_INVALID_JSON',
-      taskMessage: '生成服务返回了无法解析的响应。',
-    });
-  }
-}
-
-function extractOpenAiFailureFromResponse(status: number, body: { error?: OpenAiErrorPayload }) {
-  const providerCode = body.error?.code ?? null;
-  const providerType = body.error?.type ?? null;
-  const providerMessage = body.error?.message ?? null;
-
-  return createOpenAiGenerationFailure({
-    status,
-    providerCode,
-    providerType,
-    providerMessage,
-    internalCode: inferOpenAiInternalCode(status, providerCode, providerType),
-    taskMessage: buildTaskFailureMessage(status, providerCode, providerType, providerMessage),
-  });
-}
-
-async function downloadOpenAiImage(imageUrl: string, status: number, width: number, height: number): Promise<GeneratedImagePayload> {
-  const safeUrl = sanitizeLoggedUrl(imageUrl);
-  let imageResponse: globalThis.Response;
-
-  try {
-    imageResponse = await fetch(imageUrl, { signal: AbortSignal.timeout(openAiRequestTimeoutMs) });
-  } catch {
-    throw createOpenAiGenerationFailure({
-      status,
-      providerCode: null,
-      providerType: null,
-      providerMessage: `Image download failed from ${safeUrl}`,
-      internalCode: 'OPENAI_INVALID_RESPONSE',
-      taskMessage: '生成服务返回了无效的图片结果，请稍后重试。',
-    });
-  }
-
-  if (!imageResponse.ok) {
-    throw createOpenAiGenerationFailure({
-      status: imageResponse.status,
-      providerCode: null,
-      providerType: null,
-      providerMessage: `Image download returned HTTP ${imageResponse.status} from ${safeUrl}`,
-      internalCode: 'OPENAI_INVALID_RESPONSE',
-      taskMessage: '生成服务返回了无效的图片结果，请稍后重试。',
-    });
-  }
-
-  const contentType = imageResponse.headers.get('content-type') ?? '';
-  if (contentType && !contentType.startsWith('image/')) {
-    throw createOpenAiGenerationFailure({
-      status: imageResponse.status,
-      providerCode: null,
-      providerType: null,
-      providerMessage: `Image download returned non-image content-type ${truncateForLog(contentType, 80)} from ${safeUrl}`,
-      internalCode: 'OPENAI_INVALID_RESPONSE',
-      taskMessage: '生成服务返回了非图片结果，请稍后重试。',
-    });
-  }
-
-  const buffer = Buffer.from(await imageResponse.arrayBuffer());
-  if (buffer.byteLength === 0) {
-    throw createOpenAiGenerationFailure({
-      status: imageResponse.status,
-      providerCode: null,
-      providerType: null,
-      providerMessage: `Image download returned empty body from ${safeUrl}`,
-      internalCode: 'OPENAI_INVALID_RESPONSE',
-      taskMessage: '生成服务返回了空的图片结果，请稍后重试。',
-    });
-  }
-
-  const file = detectImageFile(buffer);
-  if (!file) {
-    throw createOpenAiGenerationFailure({
-      status: imageResponse.status,
-      providerCode: null,
-      providerType: null,
-      providerMessage: `Image download returned undetectable binary payload from ${safeUrl}`,
-      internalCode: 'OPENAI_INVALID_RESPONSE',
-      taskMessage: '生成服务返回了无法识别的图片格式。',
-    });
-  }
-
-  return {
-    buffer,
-    mimeType: file.mimeType,
-    extension: file.extension,
-    width,
-    height,
-  };
-}
-
-function createOpenAiGenerationFailure(failure: OpenAiGenerationFailure) {
-  const error = new Error(failure.taskMessage) as Error & { details?: OpenAiGenerationFailure };
-  error.details = failure;
-  return error;
-}
-
-function normalizeOpenAiGenerationFailure(error: unknown): OpenAiGenerationFailure {
-  if (error instanceof Error && 'details' in error) {
-    const details = (error as Error & { details?: OpenAiGenerationFailure }).details;
-    if (details) {
-      return details;
-    }
-  }
-
-  const message = error instanceof Error ? truncateForLog(error.message, 200) : null;
-  const networkFailure = isOpenAiNetworkFailure(message);
-
-  return {
-    status: null,
-    providerCode: null,
-    providerType: null,
-    providerMessage: message,
-    internalCode: networkFailure ? 'OPENAI_NETWORK_ERROR' : 'OPENAI_REQUEST_FAILED',
-    taskMessage: networkFailure
-      ? `生成服务网络连接失败，请检查 Base URL、网络或代理配置（${sanitizeTaskErrorDetail(message ?? 'network error')}）。`
-      : '调用生成服务失败，请查看服务日志。',
-  };
-}
-
-function isOpenAiNetworkFailure(message: string | null) {
-  if (!message) {
-    return false;
-  }
-
-  const normalized = message.toLowerCase();
-  return (
-    normalized.includes('fetch failed') ||
-    normalized.includes('network') ||
-    normalized.includes('timeout') ||
-    normalized.includes('timed out') ||
-    normalized.includes('tls') ||
-    normalized.includes('ssl') ||
-    normalized.includes('econn') ||
-    normalized.includes('enotfound') ||
-    normalized.includes('eai_again')
-  );
-}
-function logOpenAiGenerationFailure(task: TaskRow, failure: OpenAiGenerationFailure) {
-  console.warn('[openai-generation] task failed', {
-    taskId: task.id,
-    status: failure.status,
-    providerCode: failure.providerCode,
-    providerType: failure.providerType,
-    providerMessage: failure.providerMessage ? sanitizeTaskErrorDetail(failure.providerMessage) : null,
-    internalCode: failure.internalCode,
-  });
-}
-
-function inferOpenAiInternalCode(status: number, providerCode: string | null, providerType: string | null) {
-  if (status === 400) {
-    return 'OPENAI_BAD_REQUEST';
-  }
-  if (status === 401 || status === 403) {
-    return 'OPENAI_AUTH_FAILED';
-  }
-  if (status === 404) {
-    return 'OPENAI_MODEL_OR_ENDPOINT_NOT_FOUND';
-  }
-  if (status === 408 || status === 429) {
-    return 'OPENAI_RATE_LIMITED';
-  }
-  if (status >= 500) {
-    return 'OPENAI_PROVIDER_ERROR';
-  }
-  if (providerCode === 'model_not_found' || providerType === 'invalid_request_error') {
-    return 'OPENAI_MODEL_REQUEST_ERROR';
-  }
-  return 'OPENAI_REQUEST_FAILED';
-}
-
-function buildTaskFailureMessage(
-  status: number,
-  providerCode: string | null,
-  providerType: string | null,
-  providerMessage: string | null
-) {
-  const detail = sanitizeTaskErrorDetail(providerCode ?? providerType ?? providerMessage ?? `HTTP ${status}`);
-
-  if (status === 400) {
-    return `生成请求被服务拒绝，请检查模型或参数配置（${detail}）。`;
-  }
-  if (status === 401 || status === 403) {
-    return `生成服务认证失败，请检查 API Key 或服务权限（${detail}）。`;
-  }
-  if (status === 404) {
-    return `生成服务模型或接口不可用，请检查 Base URL 和模型配置（${detail}）。`;
-  }
-  if (status === 408 || status === 429) {
-    return `生成服务当前繁忙或被限流，请稍后重试（${detail}）。`;
-  }
-  if (status >= 500) {
-    return `生成服务暂时不可用，请稍后重试（${detail}）。`;
-  }
-  return `调用生成服务失败，请查看服务日志（${detail}）。`;
-}
-
-function sanitizeTaskErrorDetail(value: string) {
-  return truncateForLog(stripSensitiveText(value).replace(/\s+/g, ' ').trim(), 80);
-}
-
-function truncateForLog(value: string, maxLength: number) {
-  if (value.length <= maxLength) {
-    return value;
-  }
-  return `${value.slice(0, Math.max(0, maxLength - 1))}…`;
-}
-
-function sanitizeLoggedUrl(value: string) {
-  try {
-    const url = new URL(value);
-    return `${url.origin}${url.pathname}`;
-  } catch {
-    return truncateForLog(value.split('?')[0] ?? value, 200);
-  }
-}
-
-function stripSensitiveText(value: string) {
-  return value
-    .replace(/https?:\/\/[^\s]+/gi, (url) => sanitizeLoggedUrl(url))
-    .replace(/bearer\s+[a-z0-9._-]+/gi, 'Bearer [redacted]')
-    .replace(/sk-[a-z0-9._-]+/gi, '[redacted-api-key]')
-    .replace(/api[_-]?key\s*[:=]\s*[^\s,;]+/gi, 'api_key=[redacted]');
-}
-
-function isPng(buffer: Buffer) {
-  return buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-}
-
-function isJpeg(buffer: Buffer) {
-  return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
-}
-
-function isWebp(buffer: Buffer) {
-  return buffer.length >= 12 && buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP';
 }
 
 function createGradientPng(width: number, height: number, seed: string, thumbnail: boolean) {
@@ -3580,80 +2556,6 @@ function parsePaginationCursor(value: unknown) {
     return 0;
   }
   return Math.max(0, parsed);
-}
-
-function parseSize(size: string) {
-  const match = /^(\d+)x(\d+)$/.exec(size);
-  if (!match) {
-    return [1024, 1536] as const;
-  }
-  return [Number(match[1]), Number(match[2])] as const;
-}
-
-function normalizeOpenAiSize(size: string) {
-  const normalized = normalizeImageDimensions(...parseSize(size));
-  return `${normalized.width}x${normalized.height}`;
-}
-
-function normalizeImageDimensions(width: number, height: number) {
-  const maxEdge = 3840;
-  const minPixels = 655_360;
-  const maxPixels = 8_294_400;
-  const maxAspectRatio = 3;
-
-  let nextWidth = width;
-  let nextHeight = height;
-
-  const longestEdge = Math.max(nextWidth, nextHeight);
-  if (longestEdge > maxEdge) {
-    const scale = maxEdge / longestEdge;
-    nextWidth *= scale;
-    nextHeight *= scale;
-  }
-
-  const aspectRatio = Math.max(nextWidth, nextHeight) / Math.max(1, Math.min(nextWidth, nextHeight));
-  if (aspectRatio > maxAspectRatio) {
-    if (nextWidth >= nextHeight) {
-      nextWidth = nextHeight * maxAspectRatio;
-    } else {
-      nextHeight = nextWidth * maxAspectRatio;
-    }
-  }
-
-  const pixels = nextWidth * nextHeight;
-  if (pixels > maxPixels) {
-    const scale = Math.sqrt(maxPixels / pixels);
-    nextWidth *= scale;
-    nextHeight *= scale;
-  } else if (pixels < minPixels) {
-    const scale = Math.sqrt(minPixels / Math.max(pixels, 1));
-    nextWidth *= scale;
-    nextHeight *= scale;
-  }
-
-  return fitRoundedDimensions(nextWidth, nextHeight, maxPixels);
-}
-
-function fitRoundedDimensions(width: number, height: number, maxPixels: number) {
-  let nextWidth = roundDownToMultipleOf16(width);
-  let nextHeight = roundDownToMultipleOf16(height);
-
-  while (nextWidth * nextHeight > maxPixels) {
-    if (nextWidth >= nextHeight) {
-      nextWidth = Math.max(16, nextWidth - 16);
-    } else {
-      nextHeight = Math.max(16, nextHeight - 16);
-    }
-  }
-
-  return {
-    width: nextWidth,
-    height: nextHeight,
-  };
-}
-
-function roundDownToMultipleOf16(value: number) {
-  return Math.max(16, Math.floor(value / 16) * 16);
 }
 
 function getSessionExpiry(sessionData: session.SessionData) {
