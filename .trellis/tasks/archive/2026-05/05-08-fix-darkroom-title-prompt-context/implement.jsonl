@@ -1,0 +1,4 @@
+{"file":".trellis/tasks/05-08-fix-darkroom-title-prompt-context/prd.md","reason":"Defines the corrected title-generation requirement: fix prompt context instead of post-generation word replacement."}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Backend OpenAI-compatible generation and task summary contracts need context-hygiene update."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Task summary appears across generation task, records, queue, and result payloads."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Avoid adding duplicated title sanitation paths; reuse existing summary helpers appropriately."}
