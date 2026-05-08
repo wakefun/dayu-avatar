@@ -236,3 +236,36 @@ Merged queue and history into paginated records, fixed 3:4 4K sizing and PWA ins
 ### Next Steps
 
 - None - task complete
+
+
+## Session 8: Dayu Darkroom generation flow upgrade
+
+**Date**: 2026-05-08
+**Task**: Dayu Darkroom generation flow upgrade
+**Branch**: `main`
+
+### Summary
+
+Upgraded the app from avatar generation to Dayu Darkroom, added multimodal prompt planning, input validation, snapped auto ratios, WebP-compressed provider payloads, and updated specs.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c251904` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

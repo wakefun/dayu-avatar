@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 7
-- **Last Active**: 2026-05-07
+- **Total Sessions**: 8
+- **Last Active**: 2026-05-08
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~238 | Active |
+| `journal-1.md` | ~271 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 8 | 2026-05-08 | Dayu Darkroom generation flow upgrade | `c251904` | `main` |
 | 7 | 2026-05-07 | Unify records and PWA fixes | `d8b8556` | `main` |
 | 6 | 2026-05-06 | Style reference analysis flow | `ebd867e` | `main` |
 | 5 | 2026-05-06 | Update generation quantity options | `70b79d2` | `main` |
