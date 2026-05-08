@@ -72,3 +72,36 @@ Moved OpenAI-compatible generation to AI SDK, generated task titles after planne
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: Failed record deletion
+
+**Date**: 2026-05-08
+**Task**: Failed record deletion
+**Branch**: `main`
+
+### Summary
+
+Added failed-record-only deletion from the records page with compact action buttons and a custom confirmation dialog; verified typecheck, lint, build, and mock browser cancel/confirm flows.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `2a4159a` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
