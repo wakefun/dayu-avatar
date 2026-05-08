@@ -535,6 +535,24 @@ export function registerApiRoutes(app: Express) {
     }
   });
 
+  app.delete('/api/records/:taskId', requireAuth, (req, res) => {
+    const taskId = getRouteParam(req.params.taskId);
+    const task = getOwnedTask(req.session.userId!, taskId);
+
+    if (!task) {
+      sendError(res, 404, 'NOT_FOUND', 'task not found');
+      return;
+    }
+
+    if (task.status !== 'failed') {
+      sendError(res, 409, 'INVALID_STATE', 'only failed records can be deleted');
+      return;
+    }
+
+    db.prepare('DELETE FROM generation_tasks WHERE id = ?').run(task.id);
+    res.json({ success: true });
+  });
+
   app.get('/api/records/events', requireAuth, async (req, res, next) => {
     try {
       const userId = req.session.userId!;

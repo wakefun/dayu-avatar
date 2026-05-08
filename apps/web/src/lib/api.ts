@@ -91,6 +91,7 @@ export const api = {
     return request<RecordsResponse>(`/api/records?${params.toString()}`);
   },
   streamRecords: () => new EventSource('/api/records/events'),
+  deleteRecord: (taskId: string) => request<{ success: true }>(`/api/records/${taskId}`, { method: 'DELETE' }),
   getGallery: () => request<{ items: GalleryItem[] }>('/api/gallery-items'),
   saveGallery: (generationResultId: string) =>
     request<{ item: GalleryItem }>('/api/gallery-items', { method: 'POST', body: JSON.stringify({ generationResultId }) }),
