@@ -269,3 +269,36 @@ Upgraded the app from avatar generation to Dayu Darkroom, added multimodal promp
 ### Next Steps
 
 - None - task complete
+
+
+## Session 9: Clean task title model context
+
+**Date**: 2026-05-08
+**Task**: Clean task title model context
+**Branch**: `main`
+
+### Summary
+
+Fixed task title generation by removing product/darkroom interference from the title model input context instead of post-processing generated titles.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `50cfcf5` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
