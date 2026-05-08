@@ -611,12 +611,8 @@ app.post('/api/generation-tasks', requireAuth, async (req, res, next) => {
     const styleTags: string[] = [];
     const summary = await createTaskSummary({
       prompt,
-      styleTags,
       personalReferenceCount: personalReferenceAssetIds.length,
       styleReferenceCount: styleReferenceAssetIds.length,
-      model,
-      quality,
-      size,
     });
 
     const tasks = Array.from({ length: quantity }, () =>
@@ -1535,15 +1531,7 @@ function buildFallbackStyleReferenceAnalysis(count: number): StyleReferenceAnaly
 }
 
 
-async function createTaskSummary(input: {
-  prompt: string;
-  styleTags: string[];
-  personalReferenceCount: number;
-  styleReferenceCount: number;
-  model: string;
-  quality: string;
-  size: string;
-}) {
+async function createTaskSummary(input: { prompt: string; personalReferenceCount: number; styleReferenceCount: number }) {
   const fallback = buildFallbackTaskSummary(input);
   if (!openAiApiKey || !openAiBaseUrl) {
     return fallback;
@@ -1563,21 +1551,14 @@ async function createTaskSummary(input: {
             role: 'system',
             content: [
               'Return one short Chinese title for an image generation task.',
-              'Briefly describe only the task characteristics, such as style, scene, subject, or user request.',
+              'Describe concrete task characteristics only: user request, subject, visual style, scene, source presence, or reference presence.',
               'Use 6 to 14 Chinese characters.',
-              'Do not use generic product words such as 暗室 or 大宇暗房 unless those exact words appear in the user requirements.',
               'No markdown, punctuation, quotes, or explanation.',
             ].join(' '),
           },
           {
             role: 'user',
-            content: [
-              `User requirements: ${input.prompt || '未填写'}`,
-              `Source images: ${input.personalReferenceCount}`,
-              `Reference images: ${input.styleReferenceCount}`,
-              `Output size: ${input.size}`,
-              'Title focus: style, scene, subject, and concrete request only. Avoid product-brand filler.',
-            ].join('\n'),
+            content: buildTaskSummaryContext(input),
           },
         ],
       }),
@@ -1589,59 +1570,48 @@ async function createTaskSummary(input: {
       return fallback;
     }
 
-    return normalizeTaskSummary(extractPromptText(payload), { sourcePrompt: input.prompt }) || fallback;
+    return normalizeTaskSummary(extractPromptText(payload)) || fallback;
   } catch {
     return fallback;
   }
 }
 
-function buildFallbackTaskSummary(input: { prompt: string; styleTags: string[]; personalReferenceCount: number; styleReferenceCount: number; size: string }) {
-  const source = input.styleTags.length > 0 ? input.styleTags.join('') : input.prompt.trim();
-  const normalized = normalizeTaskSummary(source, { sourcePrompt: input.prompt });
+function buildTaskSummaryContext(input: { prompt: string; personalReferenceCount: number; styleReferenceCount: number }) {
+  const lines = [`User requirements: ${input.prompt || '未填写'}`];
+  if (input.personalReferenceCount > 0) {
+    lines.push(`Source images: ${input.personalReferenceCount}`);
+  }
+  if (input.styleReferenceCount > 0) {
+    lines.push(`Reference images: ${input.styleReferenceCount}`);
+  }
+  lines.push('Title focus: summarize the user request, subject, visual style, scene, and image-reference composition when useful.');
+  return lines.join('\n');
+}
+
+function buildFallbackTaskSummary(input: { prompt: string; personalReferenceCount: number; styleReferenceCount: number }) {
+  const normalized = normalizeTaskSummary(input.prompt.trim());
   if (normalized) {
     return normalized;
   }
 
   if (input.personalReferenceCount > 0 && input.styleReferenceCount > 0) {
-    return '原图风格迁移';
+    return '原图参考创作';
   }
   if (input.styleReferenceCount > 0) {
-    return '参考风格复刻';
+    return '参考图创作';
   }
   if (input.personalReferenceCount > 0) {
-    return '原图特征创作';
+    return '原图创作';
   }
   return '文字创意生成';
 }
 
-function normalizeTaskSummary(value: string, options: { sourcePrompt?: string } = {}) {
-  const normalized = value
+function normalizeTaskSummary(value: string) {
+  return value
     .replace(/[\r\n]+/g, ' ')
     .replace(/\s+/g, '')
     .replace(/[^\p{L}\p{N}]/gu, '')
     .slice(0, 14);
-
-  return stripGenericProductWords(normalized, options.sourcePrompt ?? '').slice(0, 14);
-}
-
-function stripGenericProductWords(value: string, sourcePrompt: string) {
-  let nextValue = value;
-  const compactPrompt = sourcePrompt.replace(/\s+/g, '');
-
-  if (!compactPrompt.includes('大宇暗房')) {
-    nextValue = nextValue.replace(/大宇暗房/g, '');
-  }
-  if (!/Dayu\s*Darkroom/i.test(sourcePrompt)) {
-    nextValue = nextValue.replace(/DayuDarkroom/gi, '');
-  }
-  if (!compactPrompt.includes('暗室')) {
-    nextValue = nextValue.replace(/暗室/g, '');
-  }
-  if (!compactPrompt.includes('暗房')) {
-    nextValue = nextValue.replace(/暗房/g, '');
-  }
-
-  return nextValue;
 }
 
 
@@ -2690,13 +2660,11 @@ function mapRecordItem(task: RecordRow) {
 }
 
 function getTaskSummary(task: TaskRow) {
-  const storedSummary = task.summary ? normalizeTaskSummary(task.summary, { sourcePrompt: task.prompt }) : '';
+  const storedSummary = task.summary ? normalizeTaskSummary(task.summary) : '';
   return storedSummary || buildFallbackTaskSummary({
     prompt: task.prompt,
-    styleTags: parseStoredStyleTags(task.style_tags_json),
     personalReferenceCount: getTaskReferenceAssetIds(task, 'personal').length,
     styleReferenceCount: getTaskReferenceAssetIds(task, 'style').length,
-    size: task.size,
   });
 }
 

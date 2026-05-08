@@ -132,7 +132,7 @@ OPENAI_REQUEST_TIMEOUT_MS           # optional, defaults to 600000ms; invalid or
 - Darkroom task creation accepts text-only, source-only-with-text, reference-only-with-text, source+reference, and text+image requests. If `prompt` is empty, at least one source image and at least one reference image are required.
 - `POST /api/style-reference-analysis` may exist as a legacy endpoint, but the Darkroom generation form must not call it; generation-time prompt planning owns image understanding.
 - When uploaded images are present, prompt planning uses `/v1/chat/completions` with `OPENAI_PROMPT_MODEL`, sends role-labeled source/reference images, and returns an internal image-generation prompt that is not exposed in API payloads.
-- Task title generation uses `/v1/chat/completions` with `OPENAI_PROMPT_MODEL` and includes user requirements plus source/reference counts; summaries should describe style/scene/subject/request characteristics and strip generic filler such as `暗室`, `暗房`, `大宇暗房`, or `Dayu Darkroom` unless user-provided.
+- Task title generation uses `/v1/chat/completions` with `OPENAI_PROMPT_MODEL` and includes only clean title signals: user requirements as typed, source/reference image counts or neutral labels, and concrete task cues. Do not add product-brand filler or other product-context terms to the title model input unless they came from the user's own prompt; summaries should describe style/scene/subject/request characteristics.
 - Do not persist access tokens. Keep `id_token` server-side only for optional provider logout.
 - OpenAI-compatible text-only generation calls `/v1/images/generations` with JSON fields and no image files.
 - OpenAI-compatible image generation calls `/v1/images/edits` with multipart image inputs; provider-bound input files are re-encoded as WebP using `cwebp -q 91`, reference images are appended before source images, the original uploaded files/assets remain unchanged, and responses may include either `b64_json` or `url` before local generated storage exposes `/static/generated/...`.
@@ -179,8 +179,8 @@ OPENAI_REQUEST_TIMEOUT_MS           # optional, defaults to 600000ms; invalid or
 - Good: text-only Darkroom requests skip prompt planning and send the custom text directly to the image generation endpoint.
 - Good: image-backed Darkroom requests run one prompt-planning chat call with role-labeled source/reference images, then use the planned prompt internally for image generation.
 - Good: provider-bound image inputs are WebP-compressed at quality 91 and ordered reference-first so provider canvas/aspect inference follows the main reference image.
-- Good: task summaries describe concrete style/scene/subject/request characteristics and avoid product filler such as `暗室`/`暗房` unless the user explicitly typed it.
-- Good: queue/history responses return explicit sanitized summary and array-based reference assets so the frontend can render cards and prefill drafts without extra round trips.
+- Good: task summary requests describe concrete style/scene/subject/request characteristics using clean user/task signals and do not add product-context filler unless the user explicitly typed it.
+- Good: queue/history responses return explicit task summaries and array-based reference assets so the frontend can render cards and prefill drafts without extra round trips.
 - Good: avatar updates only accept gallery items already owned by the current user.
 - Base: mock mode remains available and is used for local smoke tests.
 - Bad: do not decode `id_token` payload and trust it without signature and claim validation.
@@ -198,7 +198,7 @@ OPENAI_REQUEST_TIMEOUT_MS           # optional, defaults to 600000ms; invalid or
 - Add assertions for `POST /api/style-reference-analysis`: empty ids, wrong ownership/category, fallback analysis when prompt model is unavailable, and concise successful `{ tags, description }` shape while it remains available as a legacy endpoint.
 - Add assertions for `POST /api/generation-tasks`: text-only succeeds with no assets, empty text without both source/reference assets returns `400 VALIDATION_ERROR`, and invalid asset ownership/category returns `400 VALIDATION_ERROR`.
 - Add assertions that image-backed OpenAI generation runs prompt planning, keeps planned prompts internal, sends reference images before source images, and compresses provider-bound inputs as WebP quality 91.
-- Add assertions that task summaries strip generic product filler (`暗室`, `暗房`, `大宇暗房`, `Dayu Darkroom`) unless user-provided.
+- Add assertions that task summary model requests exclude product-context filler unless those terms came from the user's own prompt.
 - Real OIDC/OpenAI end-to-end verification requires external credentials and should be done manually in the deployment environment without printing secrets.
 
 ### 7. Wrong vs Correct
