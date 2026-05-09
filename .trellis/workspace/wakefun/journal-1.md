@@ -302,3 +302,36 @@ Fixed task title generation by removing product/darkroom interference from the t
 ### Next Steps
 
 - None - task complete
+
+
+## Session 10: Fix failed record delete refresh
+
+**Date**: 2026-05-09
+**Task**: Fix failed record delete refresh
+**Branch**: `main`
+
+### Summary
+
+Fixed Records page failed-record deletion so successful deletes stay hidden across paginated loads and SSE refresh merges; updated frontend spec with the live-list tombstone rule. Verification: web lint/typecheck/build passed, API lint passed; browser smoke/API typecheck blocked by pre-existing missing AI SDK dependencies.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4c1106f` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
