@@ -93,6 +93,7 @@ import {
 - Arbitrary first-reference dimensions -> snap to the nearest supported ratio before computing `generationParams.size`.
 - Resolution or quantity preference is not fully supported by backend -> keep visual control but add helper copy that states the current MVP output behavior.
 - Action inside a card would also trigger parent navigation -> split into separate `<button>` / `<a>` elements.
+- Local delete plus live/SSE list refresh -> keep a page-local tombstone set and filter deleted IDs from every paginated or streamed merge.
 - Drawer is closed -> overlay and drawer descendants must not remain tabbable.
 - Drawer is open -> provide an overlay/close path and real navigation links.
 - Upload control -> use image-specific accept behavior and show selected file state.
@@ -110,8 +111,10 @@ import {
 - Good: `UploadCard` owns the square 1/2/3-image layout, add-more overlay, remove buttons, and fullscreen-preview callbacks for both personal and style references.
 - Good: `HistoryCard` exposes a single bottom “再次生成” action while passing prefill-ready task data back to the home page.
 - Good: `GalleryCard` is just an image button plus optional favorite flower marker; fullscreen actions live in the shared lightbox footer.
+- Good: after `await api.deleteRecord(item.id)`, add `item.id` to a local tombstone set before merging any streamed records payloads.
 - Base: `ArtworkCard` renders image, metadata, and action buttons without hidden hover-only controls.
 - Bad: make the entire visual card clickable and nest retry/delete controls inside it.
+- Bad: remove a deleted record from local state once but let the next SSE first-page payload merge it back into the list.
 - Bad: reintroduce style suggestion chips or automatic snippet insertion on the custom text card.
 - Bad: reintroduce a separate “选择图片” button below the square upload area once the overlay add affordance exists.
 
@@ -121,6 +124,7 @@ import {
 - Mobile UI smoke checks should use a real mobile viewport or CDP device metrics and assert `document.documentElement.scrollWidth <= window.innerWidth` for login/shell pages; plain headless screenshots with only `--window-size` can show misleading desktop-style clipping.
 - `pnpm --filter @dayu/web lint`, `pnpm --filter @dayu/web typecheck`, and `pnpm --filter @dayu/web build` must pass after styling changes.
 - For future automated UI tests, assert buttons are reachable by text and do not cause double navigation/action.
+- For live lists with destructive row actions, assert the row stays absent after the next SSE/streamed refresh payload.
 - For auto ratio, assert the first reference image ratio snaps to the nearest supported ratio, source image dimensions are ignored, and missing reference dimensions fall back to `3:4`.
 - Add UI assertions for 1/2/3-image reference layouts, remove actions, lightbox open/close, history regenerate prefill navigation, queue completed/failed cards hiding progress bars, result image using native aspect ratio, and gallery masonry cards remaining image-only.
 

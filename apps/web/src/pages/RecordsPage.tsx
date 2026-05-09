@@ -18,11 +18,13 @@ export function RecordsPage() {
   const [deleteTarget, setDeleteTarget] = useState<RecordItem | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const loadingRef = useRef(false);
+  const deletedRecordIdsRef = useRef<Set<string>>(new Set());
 
   const mergeFirstPage = useCallback((response: RecordsResponse) => {
+    const visibleItems = response.items.filter((item) => !deletedRecordIdsRef.current.has(item.id));
     setItems((current) => {
-      const rest = current.filter((item) => !response.items.some((nextItem) => nextItem.id === item.id));
-      return [...response.items, ...rest].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      const rest = current.filter((item) => !deletedRecordIdsRef.current.has(item.id) && !visibleItems.some((nextItem) => nextItem.id === item.id));
+      return [...visibleItems, ...rest].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     });
     setNextCursor((current) => (current === 0 || current === null ? response.pagination.nextCursor : current));
   }, []);
@@ -37,7 +39,11 @@ export function RecordsPage() {
     try {
       setError(null);
       const response = await api.getRecords(nextCursor, pageSize);
-      setItems((current) => [...current, ...response.items.filter((item) => !current.some((existing) => existing.id === item.id))]);
+      const visibleItems = response.items.filter((item) => !deletedRecordIdsRef.current.has(item.id));
+      setItems((current) => [
+        ...current.filter((item) => !deletedRecordIdsRef.current.has(item.id)),
+        ...visibleItems.filter((item) => !current.some((existing) => existing.id === item.id)),
+      ]);
       setNextCursor(response.pagination.nextCursor);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : '获取记录失败');
@@ -98,6 +104,7 @@ export function RecordsPage() {
     try {
       setError(null);
       await api.deleteRecord(item.id);
+      deletedRecordIdsRef.current.add(item.id);
       setItems((current) => current.filter((record) => record.id !== item.id));
       setDeleteTarget(null);
     } catch (requestError) {
