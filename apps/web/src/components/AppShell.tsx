@@ -7,6 +7,7 @@ type ShellProps = {
   title: string;
   user: User;
   drawerOpen: boolean;
+  showInstallAction: boolean;
   installAvailable: boolean;
   onOpenDrawer: () => void;
   onCloseDrawer: () => void;
@@ -24,7 +25,17 @@ const navItems = [
 const avatarClass =
   'grid h-[42px] w-[42px] place-items-center rounded-full bg-gradient-to-br from-[#f3e8e1] to-[#dde6fa] bg-cover bg-center text-sm font-bold text-[#433632]';
 
-export function AppShell({ title, user, drawerOpen, installAvailable, onOpenDrawer, onCloseDrawer, onInstallApp, children }: ShellProps) {
+export function AppShell({
+  title,
+  user,
+  drawerOpen,
+  showInstallAction,
+  installAvailable,
+  onOpenDrawer,
+  onCloseDrawer,
+  onInstallApp,
+  children,
+}: ShellProps) {
   const navigate = useNavigate();
 
   return (
@@ -113,10 +124,11 @@ export function AppShell({ title, user, drawerOpen, installAvailable, onOpenDraw
               {item.label}
             </NavLink>
           ))}
-          {installAvailable ? (
+          {showInstallAction ? (
             <button
               type="button"
-              className="rounded-[18px] bg-white/82 px-4 py-[14px] text-left text-[15px] text-[#2f2724] shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_10px_24px_rgba(198,166,142,0.14)] transition duration-200 hover:-translate-y-0.5 hover:bg-white active:translate-y-0"
+              className="rounded-[18px] bg-white/82 px-4 py-[14px] text-left text-[15px] text-[#2f2724] shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_10px_24px_rgba(198,166,142,0.14)] transition duration-200 hover:-translate-y-0.5 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 enabled:active:translate-y-0"
+              disabled={!installAvailable}
               tabIndex={drawerOpen ? undefined : -1}
               onClick={onInstallApp}
             >

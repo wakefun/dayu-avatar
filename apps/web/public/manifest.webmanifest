@@ -1,7 +1,7 @@
 {
   "name": "大宇暗房",
   "short_name": "大宇暗房",
-  "description": "复刻参考图风格、场景与画风，生成并收藏你的图片作品。"
+  "description": "复刻参考图风格、场景与画风，生成并收藏你的图片作品。",
   "lang": "zh-CN",
   "start_url": "/",
   "scope": "/",

@@ -47,6 +47,7 @@
 - Protected page -> assume auth is checked by `App.tsx`; do not duplicate login redirects inside every page.
 - Service worker / Workbox change -> run web lint and build; verify non-navigation `/assets/` failures do not fall back to cached `/` HTML and `/static` media URLs are absent from Workbox caches.
 - Manifest icon change -> verify referenced icon files exist and their actual dimensions match declared sizes.
+- Manifest metadata change -> validate `apps/web/public/manifest.webmanifest` as JSON before browser smoke testing; a syntax error prevents Chrome from recognizing the PWA manifest.
 
 ### 5. Good/Base/Bad Cases
 
@@ -55,10 +56,12 @@
 - Base: keep state local to the page when it is not shared across routes.
 - Bad: introduce a global state library before multiple pages need shared mutable client-only state.
 - Bad: move page styling back into a large global stylesheet after the Tailwind migration.
+- Bad: edit `manifest.webmanifest` without running a JSON syntax check; browsers report manifest parse errors and PWA installability can disappear even if the install UI code is correct.
 
 ### 6. Tests Required
 
 - `pnpm typecheck`, `pnpm lint`, and `pnpm build` must pass.
+- Manifest changes must pass `python3 -m json.tool apps/web/public/manifest.webmanifest >/dev/null`.
 - Browser smoke test should cover login, drawer navigation, generation page, upload, result, gallery, queue/history/settings reachability.
 
 ### 7. Wrong vs Correct
