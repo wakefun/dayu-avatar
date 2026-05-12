@@ -105,3 +105,36 @@ Added failed-record-only deletion from the records page with compact action butt
 ### Next Steps
 
 - None - task complete
+
+
+## Session 4: Fix PWA install menu
+
+**Date**: 2026-05-12
+**Task**: Fix PWA install menu
+**Branch**: `main`
+
+### Summary
+
+Restored the sidebar PWA install action, fixed invalid manifest JSON, added modern PWA meta, updated frontend manifest validation spec, and verified lint/typecheck/build plus browser smoke test.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4d22bc9` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
