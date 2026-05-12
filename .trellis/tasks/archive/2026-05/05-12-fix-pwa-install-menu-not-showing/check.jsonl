@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Verify side drawer accessibility, install action behavior, and required web checks"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Verify TypeScript state/prop typing remains clean"}
+{"file":".trellis/spec/guides/index.md","reason":"Verify minimal scoped change and no stale related values"}
+{"file":".trellis/tasks/archive/2026-05/05-07-pwa/prd.md","reason":"Verify installed/standalone mode does not show install copy"}
+{"file":".trellis/tasks/archive/2026-05/05-05-project-audit-non-breaking-fixes/research/pwa-config-audit.md","reason":"Verify install affordance remains harmless when prompt is unavailable"}

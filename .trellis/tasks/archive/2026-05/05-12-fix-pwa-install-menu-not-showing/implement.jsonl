@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"AppShell side drawer and install action UI contract"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Frontend TypeScript boundary and local state conventions"}
+{"file":".trellis/spec/guides/index.md","reason":"Shared pre-modification thinking guide"}
+{"file":".trellis/tasks/archive/2026-05/05-07-pwa/prd.md","reason":"Historical PWA installed-state acceptance criteria"}
+{"file":".trellis/tasks/archive/2026-05/05-05-project-audit-non-breaking-fixes/research/pwa-config-audit.md","reason":"Prior audit note about install affordance remaining harmless"}
