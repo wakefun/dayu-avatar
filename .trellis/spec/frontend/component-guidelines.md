@@ -82,6 +82,7 @@ import {
 - Gallery cards show a pink flower marker only for favorited items.
 - Gallery actions (favorite, download, delete, set-as-avatar, generated time) belong in the fullscreen preview footer, not inside the masonry card itself.
 - Result-page image display should preserve original width/height with `object-fit: contain`; do not crop to a fixed portrait frame.
+- Result-page generation parameters should show available `personalReferenceAssets` and `styleReferenceAssets` as labeled source/reference thumbnails before the parameter rows; thumbnails should reuse fullscreen preview behavior and must not require extra API calls.
 - Sidebar install action is a UI affordance that calls the browser install prompt when available and otherwise remains harmless.
 - Sidebar install action renders only when the app is not already installed and `beforeinstallprompt` has provided an install prompt.
 - Sidebar install action is not route navigation and must not reuse the active drawer navigation item style by default.
@@ -104,6 +105,7 @@ import {
 - Fullscreen preview footer actions must stay touch-reachable and cannot depend on hover-only controls.
 - Fullscreen preview dialog must have an accessible label, focus an explicit close control on open, and close on Escape.
 - Result image styling must use real image dimensions when available; hard-coded aspect ratio reintroduces cropping.
+- Result-page reference thumbnails should handle nullable asset dimensions and stay within the mobile viewport without horizontal document overflow.
 - Gallery masonry cards should not add captions or inline action rows back into the grid.
 
 ### 5. Good/Base/Bad Cases
@@ -130,7 +132,7 @@ import {
 - For future automated UI tests, assert buttons are reachable by text and do not cause double navigation/action.
 - For live lists with destructive row actions, assert the row stays absent after the next SSE/streamed refresh payload.
 - For auto ratio, assert the first reference image ratio snaps to the nearest supported ratio, source image dimensions are ignored, and missing reference dimensions fall back to `3:4`.
-- Add UI assertions for 1/2/3-image reference layouts, remove actions, lightbox open/close, history regenerate prefill navigation, queue completed/failed cards hiding progress bars, result image using native aspect ratio, and gallery masonry cards remaining image-only.
+- Add UI assertions for 1/2/3-image reference layouts, remove actions, lightbox open/close, history regenerate prefill navigation, queue completed/failed cards hiding progress bars, result image using native aspect ratio, result-page reference thumbnails opening lightbox without page overflow, and gallery masonry cards remaining image-only.
 
 ### 7. Wrong vs Correct
 

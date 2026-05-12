@@ -3,8 +3,14 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ImageLightbox } from '../components/ImageLightbox';
 import { PageSection } from '../components/PageSection';
 import { api } from '../lib/api';
-import type { GalleryItem, GenerationResult, GenerationTask } from '../lib/types';
+import type { Asset, GalleryItem, GenerationResult, GenerationTask } from '../lib/types';
 import { pageStackClass, primaryButtonClass, secondaryButtonClass } from '../components/ui';
+
+type ReferencePreview = {
+  asset: Asset;
+  label: string;
+  index: number;
+};
 
 export function ResultPage() {
   const { taskId = '' } = useParams();
@@ -14,6 +20,7 @@ export function ResultPage() {
   const [savedItem, setSavedItem] = useState<GalleryItem | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [referencePreview, setReferencePreview] = useState<ReferencePreview | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -48,6 +55,9 @@ export function ResultPage() {
     task?.status === 'failed' || task?.status === 'canceled'
       ? '这个任务没有可查看的生成结果，你可以回到生成页重新生成。'
       : '结果已准备完成，你可以保存到图库、下载原图或继续生成新的版本。';
+  const personalReferenceAssets = task?.personalReferenceAssets ?? [];
+  const styleReferenceAssets = task?.styleReferenceAssets ?? [];
+  const hasReferenceAssets = personalReferenceAssets.length > 0 || styleReferenceAssets.length > 0;
 
   return (
     <div className={pageStackClass}>
@@ -120,6 +130,24 @@ export function ResultPage() {
       </PageSection>
 
       <PageSection title="生成参数" subtitle="查看本次暗房生成所使用的需求、参考图与基础参数。">
+        {hasReferenceAssets ? (
+          <div className="grid min-w-0 gap-3 border-b border-[#807269]/10 pb-3.5">
+            {personalReferenceAssets.length > 0 ? (
+              <ReferenceImageGroup
+                label="原图"
+                assets={personalReferenceAssets}
+                onPreview={(asset, index) => setReferencePreview({ asset, label: '原图', index })}
+              />
+            ) : null}
+            {styleReferenceAssets.length > 0 ? (
+              <ReferenceImageGroup
+                label="参考图"
+                assets={styleReferenceAssets}
+                onPreview={(asset, index) => setReferencePreview({ asset, label: '参考图', index })}
+              />
+            ) : null}
+          </div>
+        ) : null}
         <dl className="m-0">
           <div className="border-b border-[#807269]/10 py-3.5">
             <dt className="mb-1.5 font-bold text-[#2f2724]">自定义需求</dt>
@@ -150,10 +178,52 @@ export function ResultPage() {
         image={
           result?.imageUrl && previewOpen
             ? { src: result.thumbnailUrl ?? result.imageUrl, alt: '生成作品结果', width: result.width, height: result.height, meta: result.createdAt ? new Date(result.createdAt).toLocaleString() : undefined }
-            : null
+            : referencePreview
+              ? {
+                  src: referencePreview.asset.fileUrl,
+                  alt: `${referencePreview.label} ${referencePreview.index + 1}`,
+                  width: referencePreview.asset.width,
+                  height: referencePreview.asset.height,
+                }
+              : null
         }
-        onClose={() => setPreviewOpen(false)}
+        onClose={() => {
+          setPreviewOpen(false);
+          setReferencePreview(null);
+        }}
       />
+    </div>
+  );
+}
+
+type ReferenceImageGroupProps = {
+  label: string;
+  assets: Asset[];
+  onPreview: (asset: Asset, index: number) => void;
+};
+
+function ReferenceImageGroup({ label, assets, onPreview }: ReferenceImageGroupProps) {
+  return (
+    <div className="grid min-w-0 gap-2">
+      <div className="text-xs font-bold tracking-[0.12em] text-[#8a7a72]">{label}</div>
+      <div className="flex w-full max-w-full gap-2 overflow-x-auto pb-1">
+        {assets.map((asset, index) => (
+          <button
+            key={asset.id}
+            type="button"
+            className="h-20 w-20 shrink-0 overflow-hidden rounded-[18px] border border-white/80 bg-white/60 p-0 shadow-[0_8px_20px_rgba(71,55,45,0.08)]"
+            onClick={() => onPreview(asset, index)}
+            aria-label={`全屏查看${label} ${index + 1}`}
+          >
+            <img
+              className="block h-full w-full object-contain"
+              src={asset.fileUrl}
+              alt={`${label} ${index + 1}`}
+              style={asset.width && asset.height ? { aspectRatio: `${asset.width} / ${asset.height}` } : undefined}
+            />
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
