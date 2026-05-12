@@ -117,8 +117,7 @@ export function App() {
       title={title}
       user={user}
       drawerOpen={drawerOpen}
-      showInstallAction={!installedDisplayMode}
-      installAvailable={Boolean(installPrompt)}
+      showInstallAction={!installedDisplayMode && Boolean(installPrompt)}
       onOpenDrawer={() => setDrawerOpen(true)}
       onCloseDrawer={() => setDrawerOpen(false)}
       onInstallApp={async () => {

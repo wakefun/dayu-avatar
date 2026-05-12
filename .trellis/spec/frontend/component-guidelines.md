@@ -83,6 +83,8 @@ import {
 - Gallery actions (favorite, download, delete, set-as-avatar, generated time) belong in the fullscreen preview footer, not inside the masonry card itself.
 - Result-page image display should preserve original width/height with `object-fit: contain`; do not crop to a fixed portrait frame.
 - Sidebar install action is a UI affordance that calls the browser install prompt when available and otherwise remains harmless.
+- Sidebar install action renders only when the app is not already installed and `beforeinstallprompt` has provided an install prompt.
+- Sidebar install action is not route navigation and must not reuse the active drawer navigation item style by default.
 - Topbar avatar opens settings and should render the actual user avatar image when available.
 - Settings page must show the current session auth mode and handle provider logout redirects when returned by the API.
 
@@ -117,6 +119,8 @@ import {
 - Bad: remove a deleted record from local state once but let the next SSE first-page payload merge it back into the list.
 - Bad: reintroduce style suggestion chips or automatic snippet insertion on the custom text card.
 - Bad: reintroduce a separate “选择图片” button below the square upload area once the overlay add affordance exists.
+- Bad: show a disabled sidebar “添加到桌面” action when the install prompt is unavailable; hide the action instead.
+- Bad: style the sidebar “添加到桌面” action like an active `NavLink`; it should look like a neutral action unless the user is interacting with it.
 
 ### 6. Tests Required
 

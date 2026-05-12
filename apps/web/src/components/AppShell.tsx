@@ -8,7 +8,6 @@ type ShellProps = {
   user: User;
   drawerOpen: boolean;
   showInstallAction: boolean;
-  installAvailable: boolean;
   onOpenDrawer: () => void;
   onCloseDrawer: () => void;
   onInstallApp: () => void;
@@ -30,7 +29,6 @@ export function AppShell({
   user,
   drawerOpen,
   showInstallAction,
-  installAvailable,
   onOpenDrawer,
   onCloseDrawer,
   onInstallApp,
@@ -127,8 +125,7 @@ export function AppShell({
           {showInstallAction ? (
             <button
               type="button"
-              className="rounded-[18px] bg-white/82 px-4 py-[14px] text-left text-[15px] text-[#2f2724] shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_10px_24px_rgba(198,166,142,0.14)] transition duration-200 hover:-translate-y-0.5 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60 enabled:active:translate-y-0"
-              disabled={!installAvailable}
+              className="rounded-[18px] px-4 py-[14px] text-left text-[15px] text-[#6b5f59] transition duration-200 hover:bg-white/60 hover:text-[#2f2724] active:bg-white/70"
               tabIndex={drawerOpen ? undefined : -1}
               onClick={onInstallApp}
             >
