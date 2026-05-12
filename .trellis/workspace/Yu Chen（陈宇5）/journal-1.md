@@ -138,3 +138,36 @@ Restored the sidebar PWA install action, fixed invalid manifest JSON, added mode
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: Fix PWA install menu visibility
+
+**Date**: 2026-05-12
+**Task**: Fix PWA install menu visibility
+**Branch**: `main`
+
+### Summary
+
+Fixed the PWA drawer install action so it only appears when an install prompt is available and the app is not already installed, kept the action styled as a neutral drawer item, updated frontend component guidance, and verified lint/typecheck/build.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e4f5696` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
