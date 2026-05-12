@@ -204,3 +204,36 @@ Centralized OpenAI prompt constants and builders into apps/api/src/openai-prompt
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: Show result page reference thumbnails
+
+**Date**: 2026-05-12
+**Task**: Show result page reference thumbnails
+**Branch**: `main`
+
+### Summary
+
+Added source and style reference thumbnails to the result page generation-parameters section, reused ImageLightbox preview, updated frontend component spec, and verified web/root checks plus browser smoke.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `40e1992` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
