@@ -2,8 +2,18 @@ import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createOpenAI, type OpenAIChatLanguageModelOptions, type OpenAIImageModelEditOptions, type OpenAIImageModelGenerationOptions } from '@ai-sdk/openai';
-import { APICallError, generateImage, generateText, NoImageGeneratedError, type ModelMessage, type UserContent } from 'ai';
+import { APICallError, generateImage, generateText, NoImageGeneratedError, type ModelMessage } from 'ai';
 import { detectImageFile, normalizeOpenAiSize, normalizeOutputFormat, parseSize } from './image-utils';
+import {
+  buildFallbackPlannedImagePrompt,
+  buildPromptPlanningMessage,
+  buildStyleAnalysisMessage,
+  buildTaskSummaryContext,
+  IMAGE_PROMPT_PLANNER_SYSTEM_PROMPT,
+  STYLE_REFERENCE_ANALYSIS_SYSTEM_PROMPT,
+  TASK_SUMMARY_SYSTEM_PROMPT,
+  type PromptContentPart,
+} from './openai-prompts';
 
 export type ProviderAsset = {
   id: string;
@@ -104,12 +114,11 @@ export async function analyzeStyleReferenceAssets(assets: ProviderAsset[]): Prom
       messages: [
         {
           role: 'system',
-          content:
-            'Analyze avatar style reference images. Return compact JSON only: {"tags":["tag1","tag2","tag3","tag4"],"description":"short Chinese style summary"}. Tags must be 2-6 short Chinese labels. Description must be one short Chinese sentence under 60 characters covering scene, lighting, and palette.',
+          content: STYLE_REFERENCE_ANALYSIS_SYSTEM_PROMPT,
         },
         {
           role: 'user',
-          content: buildStyleAnalysisMessage(assets),
+          content: buildStyleAnalysisMessage(assets, buildImageMessagePart),
         },
       ],
       timeoutMs: Math.min(getOpenAiOptions().requestTimeoutMs, 30_000),
@@ -132,12 +141,7 @@ export async function createTaskSummary(input: TaskSummaryInput) {
       messages: [
         {
           role: 'system',
-          content: [
-            'Return one short Chinese title for an image generation task.',
-            'Describe concrete task characteristics only: user request, subject, visual style, scene, source presence, or reference presence.',
-            'Use 6 to 14 Chinese characters.',
-            'No markdown, punctuation, quotes, or explanation.',
-          ].join(' '),
+          content: TASK_SUMMARY_SYSTEM_PROMPT,
         },
         {
           role: 'user',
@@ -290,16 +294,11 @@ export async function createPlannedImagePrompt(input: PlannedImagePromptInput) {
       messages: [
         {
           role: 'system',
-          content: [
-            'You are the prompt planner for an image creation studio.',
-            'Given role-labeled uploaded images and optional user requirements, infer the desired final image and return one production-ready image generation prompt.',
-            'User custom requirements have the highest priority. If they conflict with image-derived guidance, follow the user requirements first.',
-            'Do not mention that you are analyzing images. Return only the final prompt, no markdown or explanation.',
-          ].join(' '),
+          content: IMAGE_PROMPT_PLANNER_SYSTEM_PROMPT,
         },
         {
           role: 'user',
-          content: buildPromptPlanningMessage(input),
+          content: buildPromptPlanningMessage(input, buildImageMessagePart),
         },
       ],
       providerOptions: {
@@ -411,71 +410,13 @@ function getTaskAssets(task: ProviderTask, type: 'personal' | 'style') {
     .filter((asset): asset is ProviderAsset => Boolean(asset));
 }
 
-function buildStyleAnalysisMessage(assets: ProviderAsset[]): UserContent {
-  return [
-    {
-      type: 'text',
-      text: [
-        `Style reference image count: ${assets.length}`,
-        'Extract only the visible style language: scene, lighting, color palette, composition, medium, texture, and atmosphere.',
-        'Do not identify people or copy identity from the reference images.',
-      ].join('\n'),
-    },
-    ...assets.map((asset) => buildImageMessagePart(asset)),
-  ];
-}
-
-function buildPromptPlanningMessage(input: PlannedImagePromptInput): UserContent {
-  return [
-    {
-      type: 'text',
-      text: [
-        `User custom requirements (highest priority): ${input.userPrompt || 'None'}`,
-        `Source image count: ${input.sourceAssets.length}. Source images provide subject, identity, object, and feature information to preserve when relevant.`,
-        `Reference image count: ${input.referenceAssets.length}. Reference images provide style, scene, composition, medium, lighting, palette, mood, and visual language.`,
-        `Requested output size: ${input.size}.`,
-        'If source and reference images are both present, preserve the source subject/features while recreating the reference style/scene/visual language. Never copy identity from reference images.',
-      ].join('\n'),
-    },
-    ...input.sourceAssets.flatMap((asset, index) => [
-      {
-        type: 'text' as const,
-        text: `Source image ${index + 1}: extract and preserve the subject/features from this image as applicable.`,
-      },
-      buildImageMessagePart(asset),
-    ]),
-    ...input.referenceAssets.flatMap((asset, index) => [
-      {
-        type: 'text' as const,
-        text: `Reference image ${index + 1}: extract style, scene, composition, lighting, palette, medium, texture, and mood from this image.`,
-      },
-      buildImageMessagePart(asset),
-    ]),
-  ];
-}
-
-function buildImageMessagePart(asset: ProviderAsset) {
+function buildImageMessagePart(asset: ProviderAsset): PromptContentPart {
   const config = getOpenAiOptions();
   return {
     type: 'file' as const,
     data: fs.readFileSync(path.join(config.dataRoot, asset.storage_path)),
     mediaType: asset.mime_type || 'application/octet-stream',
   };
-}
-
-function buildTaskSummaryContext(input: TaskSummaryInput) {
-  const lines = [`User requirements: ${input.prompt || '未填写'}`];
-  if (input.plannedPrompt) {
-    lines.push(`Final image prompt: ${input.plannedPrompt}`);
-  }
-  if (input.personalReferenceCount > 0) {
-    lines.push(`Source images: ${input.personalReferenceCount}`);
-  }
-  if (input.styleReferenceCount > 0) {
-    lines.push(`Reference images: ${input.styleReferenceCount}`);
-  }
-  lines.push('Title focus: summarize the final image prompt first, then user request, subject, visual style, scene, and image-reference composition when useful.');
-  return lines.join('\n');
 }
 
 function parseStyleReferenceAnalysis(value: string): StyleReferenceAnalysis | null {
@@ -530,28 +471,6 @@ function buildFallbackStyleReferenceAnalysis(count: number): StyleReferenceAnaly
     tags: count > 1 ? ['主图场景', '参考风格', '光影配色'] : ['参考构图', '风格还原', '光影配色'],
     description: count > 1 ? '以主图场景为核心，融合参考图的光影、配色与质感。' : '提取参考图的场景、打光、配色与构图用于风格还原。',
   };
-}
-
-function buildFallbackPlannedImagePrompt(input: PlannedImagePromptInput) {
-  const lines = [
-    'Create one refined image',
-    'Produce a polished, coherent, high-quality final image with strong composition, clear subject, intentional lighting, and tasteful color design.',
-  ];
-
-  if (input.sourceAssets.length > 0) {
-    lines.push('Use the uploaded source image(s) to preserve the main subject, identity, object features, shape language, and recognizable details where relevant.');
-  }
-  if (input.referenceAssets.length === 1) {
-    lines.push('Use the uploaded reference image to recreate its style, scene, composition, lighting, color palette, texture, medium, and mood.');
-  } else if (input.referenceAssets.length > 1) {
-    lines.push('Use reference image 1 as the main scene/composition reference, and use later reference images as secondary cues for palette, texture, rendering medium, mood, and details.');
-  }
-  if (input.userPrompt) {
-    lines.push(`Highest priority user requirements: ${input.userPrompt}`);
-    lines.push('If any instruction conflicts, follow the user requirements first, then source preservation, then reference style guidance.');
-  }
-  lines.push(`Requested output size: ${input.size}.`);
-  return lines.join('\n\n');
 }
 
 function normalizePlannedImagePrompt(value: string) {
