@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 5
+- **Total Sessions**: 6
 - **Last Active**: 2026-05-12
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~173 | Active |
+| `journal-1.md` | ~206 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 6 | 2026-05-12 | Centralize backend OpenAI prompts | `1474b70` | `main` |
 | 5 | 2026-05-12 | Fix PWA install menu visibility | `e4f5696` | `main` |
 | 4 | 2026-05-12 | Fix PWA install menu | `4d22bc9` | `main` |
 | 3 | 2026-05-08 | Failed record deletion | `2a4159a` | `main` |

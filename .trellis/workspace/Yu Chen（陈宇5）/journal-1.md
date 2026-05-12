@@ -171,3 +171,36 @@ Fixed the PWA drawer install action so it only appears when an install prompt is
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: Centralize backend OpenAI prompts
+
+**Date**: 2026-05-12
+**Task**: Centralize backend OpenAI prompts
+**Branch**: `main`
+
+### Summary
+
+Centralized OpenAI prompt constants and builders into apps/api/src/openai-prompts.ts, updated generation logic to import them, added Chinese prompt translations/comments, and verified API/root checks.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1474b70` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
