@@ -55,8 +55,9 @@ import {
 ```
 
 - Darkroom homepage setting controls:
-  - `图片比例`: `auto`, `1:1`, `3:4`, `4:3`, `9:16`, `16:9`, `21:9`, `9:21`
+  - `图片比例`: `auto`, `1:1`, `3:4`, `4:3`, `9:16`, `16:9`, `21:9`, `9:21`, `custom`
   - `auto` resolves from the first reference image only, snaps to the nearest listed explicit ratio, and falls back to `3:4` without reference dimensions
+  - `custom` shows a compact ratio input and accepts positive numeric `宽:高` values such as `5:4`, `2.35:1`, or `1080:1350`
   - `图片分辨率`: `1K`, `2K`, `4K`
   - `生成数量`: `1`, `2`, `3`, `6` (default `1`)
 
@@ -94,6 +95,8 @@ import {
 - Empty custom text and missing source/reference pair -> block submit with a validation message before creating a task.
 - `auto` ratio with no first reference dimensions -> show and use `3:4`.
 - Arbitrary first-reference dimensions -> snap to the nearest supported ratio before computing `generationParams.size`.
+- Invalid custom ratio input -> block submit before task creation and show a concise Chinese validation message.
+- Valid custom ratio input -> compute dimensions from the selected resolution base, then normalize to OpenAI-compatible `WIDTHxHEIGHT` constraints before sending `generationParams.size`.
 - Resolution or quantity preference is not fully supported by backend -> keep visual control but add helper copy that states the current MVP output behavior.
 - Action inside a card would also trigger parent navigation -> split into separate `<button>` / `<a>` elements.
 - Local delete plus live/SSE list refresh -> keep a page-local tombstone set and filter deleted IDs from every paginated or streamed merge.

@@ -60,8 +60,9 @@ api.createTask({
 - Frontend sends array-based reference ids to `POST /api/generation-tasks`; it must not send only the legacy single-id fields.
 - Frontend must not request upload-time style-reference analysis in the Darkroom MVP; generation-time prompt planning is backend-owned.
 - Frontend sends custom requirements as `prompt`; it must not auto-insert tags or generated snippets into the custom prompt textarea.
+- Frontend sends `generationParams.size` as an OpenAI-compatible `WIDTHxHEIGHT` string; custom ratio UI state must be resolved and normalized before `api.createTask`.
 - Frontend reads `promptSummary`/`summary` from API payloads instead of truncating raw prompts locally for cards.
-- Records items must carry `prompt`, `styleTags`, `personalReferenceAssets`, `styleReferenceAssets`, and `generationParams` so navigation state can prefill the generation page.
+- Records items must carry `prompt`, `styleTags`, `personalReferenceAssets`, `styleReferenceAssets`, and `generationParams` so navigation state can prefill the generation page, including recovering custom ratio mode from stored sizes that are not close to preset ratios.
 - Records responses must include `pagination.nextCursor` and active terminal status data; the records page merges the SSE first page with paged results instead of choosing between queue and history shapes.
 - Result/gallery/records image payloads should carry both `thumbnailUrl` and `imageUrl` when available; UI previews prefer `thumbnailUrl`, while download actions use `imageUrl`.
 - Result routes must fetch task status before fetching `/result`; queued/processing tasks redirect to loading, and failed/canceled tasks show terminal copy instead of claiming a result is ready.

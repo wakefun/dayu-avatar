@@ -16,6 +16,7 @@ const ratioOptions = [
   { value: '16:9', label: '16:9' },
   { value: '21:9', label: '21:9' },
   { value: '9:21', label: '9:21' },
+  { value: 'custom', label: '自定义' },
 ] as const;
 
 const resolutionOptions = [
@@ -32,7 +33,7 @@ const quantityOptions = [
 ] as const;
 
 type RatioValue = (typeof ratioOptions)[number]['value'];
-type ExplicitRatioValue = Exclude<RatioValue, 'auto'>;
+type ExplicitRatioValue = Exclude<RatioValue, 'auto' | 'custom'>;
 type ResolutionValue = (typeof resolutionOptions)[number]['value'];
 type QuantityValue = (typeof quantityOptions)[number]['value'];
 
@@ -71,6 +72,7 @@ export function GeneratePage() {
   const [styleAssets, setStyleAssets] = useState<Asset[]>([]);
   const [prompt, setPrompt] = useState('');
   const [ratio, setRatio] = useState<RatioValue>('auto');
+  const [customRatio, setCustomRatio] = useState('3:4');
   const [resolution, setResolution] = useState<ResolutionValue>('2k');
   const [quantity, setQuantity] = useState<QuantityValue>('1');
   const [submitting, setSubmitting] = useState(false);
@@ -90,6 +92,9 @@ export function GeneratePage() {
     const controls = parseControlsFromSize(state.generationParams?.size);
     setRatio(controls.ratio);
     setResolution(controls.resolution);
+    if (controls.customRatio) {
+      setCustomRatio(controls.customRatio);
+    }
     navigate('.', { replace: true, state: null });
   }, [location.state, navigate]);
 
@@ -153,6 +158,17 @@ export function GeneratePage() {
         <div className="grid gap-4">
           <SegmentedControl label="图片比例" options={ratioOptions} value={ratio} onChange={setRatio} />
           {ratio === 'auto' ? <p className={helperTextClass}>当前自动比例：{describeAutoRatio(styleAssets[0])}</p> : null}
+          {ratio === 'custom' ? (
+            <label className={fieldLabelClass}>
+              <span>自定义比例</span>
+              <input
+                className={inputClass}
+                value={customRatio}
+                onChange={(event) => setCustomRatio(event.target.value)}
+                placeholder="例如 5:4、2.35:1、1080:1350"
+              />
+            </label>
+          ) : null}
           <SegmentedControl label="图片分辨率" options={resolutionOptions} value={resolution} onChange={setResolution} />
           <SegmentedControl label="生成数量" options={quantityOptions} value={quantity} onChange={setQuantity} />
           <p className={helperTextClass}>高分辨率会按比例换算成合法尺寸，并规范到不超过像素上限的 16 倍数；数量大于 1 时会创建多条任务。</p>
@@ -169,6 +185,12 @@ export function GeneratePage() {
               return;
             }
 
+            const customRatioValue = ratio === 'custom' ? parseCustomRatio(customRatio) : null;
+            if (ratio === 'custom' && !customRatioValue) {
+              setError('请输入有效的自定义比例，例如 5:4、2.35:1 或 1080:1350');
+              return;
+            }
+
             try {
               setSubmitting(true);
               setError(null);
@@ -181,7 +203,7 @@ export function GeneratePage() {
                 generationParams: {
                   model: 'gpt-image-2',
                   quality: 'high',
-                  size: normalizeImageSize(ratio, resolution, styleAssets[0]),
+                  size: normalizeImageSize(ratio, resolution, styleAssets[0], customRatioValue ?? undefined),
                   outputFormat: 'png',
                 },
               });
@@ -234,9 +256,14 @@ function SegmentedControl<T extends string>({ label, options, value, onChange }:
   );
 }
 
-function normalizeImageSize(ratio: RatioValue, resolution: ResolutionValue, referenceAsset: Asset | undefined) {
+function normalizeImageSize(
+  ratio: RatioValue,
+  resolution: ResolutionValue,
+  referenceAsset: Asset | undefined,
+  customRatio?: CustomRatioValue
+) {
   const base = getResolutionBase(resolution);
-  const { width, height } = getRatioDimensions(ratio, base, referenceAsset);
+  const { width, height } = getRatioDimensions(ratio, base, referenceAsset, customRatio);
   const normalized = normalizeSize(width, height);
   return `${normalized.width}x${normalized.height}`;
 }
@@ -251,9 +278,20 @@ function getResolutionBase(resolution: ResolutionValue) {
   return 1024;
 }
 
-function getRatioDimensions(ratio: RatioValue, base: number, referenceAsset?: Asset) {
+type CustomRatioValue = {
+  width: number;
+  height: number;
+};
+
+function getRatioDimensions(ratio: RatioValue, base: number, referenceAsset?: Asset, customRatio?: CustomRatioValue) {
   if (ratio === 'auto') {
     return getRatioDimensions(resolveAutoRatio(referenceAsset), base);
+  }
+  if (ratio === 'custom') {
+    if (!customRatio) {
+      return getRatioDimensions('3:4', base);
+    }
+    return getCustomRatioDimensions(customRatio, base);
   }
   if (ratio === '1:1') {
     return { width: base, height: base };
@@ -274,6 +312,28 @@ function getRatioDimensions(ratio: RatioValue, base: number, referenceAsset?: As
     return { width: (base * 9) / 21, height: base };
   }
   return { width: (base * 3) / 4, height: base };
+}
+
+function getCustomRatioDimensions(customRatio: CustomRatioValue, base: number) {
+  if (customRatio.width >= customRatio.height) {
+    return { width: base, height: (base * customRatio.height) / customRatio.width };
+  }
+  return { width: (base * customRatio.width) / customRatio.height, height: base };
+}
+
+function parseCustomRatio(value: string): CustomRatioValue | null {
+  const match = value.trim().match(/^(\d+(?:\.\d+)?)\s*[:：]\s*(\d+(?:\.\d+)?)$/);
+  if (!match) {
+    return null;
+  }
+
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return null;
+  }
+
+  return { width, height };
 }
 
 function normalizeSize(width: number, height: number) {
@@ -312,12 +372,28 @@ function normalizeSize(width: number, height: number) {
     nextHeight *= scale;
   }
 
-  return fitRoundedDimensions(nextWidth, nextHeight, maxPixels);
+  return fitRoundedDimensions(nextWidth, nextHeight, minPixels, maxPixels, maxAspectRatio);
 }
 
-function fitRoundedDimensions(width: number, height: number, maxPixels: number) {
+function fitRoundedDimensions(width: number, height: number, minPixels: number, maxPixels: number, maxAspectRatio: number) {
   let nextWidth = roundDownToMultipleOf16(width);
   let nextHeight = roundDownToMultipleOf16(height);
+
+  while (getLongShortRatio(nextWidth, nextHeight) > maxAspectRatio) {
+    if (nextWidth >= nextHeight) {
+      nextHeight += 16;
+    } else {
+      nextWidth += 16;
+    }
+  }
+
+  while (nextWidth * nextHeight < minPixels) {
+    if (nextWidth <= nextHeight) {
+      nextWidth += 16;
+    } else {
+      nextHeight += 16;
+    }
+  }
 
   while (nextWidth * nextHeight > maxPixels) {
     if (nextWidth >= nextHeight) {
@@ -333,11 +409,15 @@ function fitRoundedDimensions(width: number, height: number, maxPixels: number) 
   };
 }
 
+function getLongShortRatio(width: number, height: number) {
+  return Math.max(width, height) / Math.max(1, Math.min(width, height));
+}
+
 function roundDownToMultipleOf16(value: number) {
   return Math.max(16, Math.floor(value / 16) * 16);
 }
 
-function parseControlsFromSize(size: string | undefined): { ratio: RatioValue; resolution: ResolutionValue } {
+function parseControlsFromSize(size: string | undefined): { ratio: RatioValue; resolution: ResolutionValue; customRatio?: string } {
   const match = size?.match(/^(\d+)x(\d+)$/);
   if (!match) {
     return { ratio: 'auto', resolution: '2k' };
@@ -345,10 +425,14 @@ function parseControlsFromSize(size: string | undefined): { ratio: RatioValue; r
 
   const width = Number(match[1]);
   const height = Number(match[2]);
-  const ratioValue = findNearestExplicitRatio(width / Math.max(1, height));
+  const aspectRatio = width / Math.max(1, height);
+  const ratioValue = findNearestExplicitRatio(aspectRatio);
   const longest = Math.max(width, height);
   const resolutionValue = longest >= 3600 ? '4k' : longest >= 1900 ? '2k' : '1k';
-  return { ratio: ratioValue, resolution: resolutionValue };
+  if (isCloseToExplicitRatio(aspectRatio, ratioValue)) {
+    return { ratio: ratioValue, resolution: resolutionValue };
+  }
+  return { ratio: 'custom', resolution: resolutionValue, customRatio: formatCustomRatio(width, height) };
 }
 
 function describeAutoRatio(referenceAsset: Asset | undefined) {
@@ -370,6 +454,29 @@ function findNearestExplicitRatio(aspectRatio: number): ExplicitRatioValue {
   return explicitRatioOptions.reduce((best, next) =>
     Math.abs(Math.log(next.aspectRatio / aspectRatio)) < Math.abs(Math.log(best.aspectRatio / aspectRatio)) ? next : best
   ).value;
+}
+
+function isCloseToExplicitRatio(aspectRatio: number, ratio: ExplicitRatioValue) {
+  const explicitRatio = explicitRatioOptions.find((option) => option.value === ratio)?.aspectRatio ?? 1;
+  return Math.abs(Math.log(explicitRatio / aspectRatio)) < 0.03;
+}
+
+function formatCustomRatio(width: number, height: number) {
+  const divisor = greatestCommonDivisor(width, height);
+  const ratioWidth = width / divisor;
+  const ratioHeight = height / divisor;
+  return `${ratioWidth}:${ratioHeight}`;
+}
+
+function greatestCommonDivisor(first: number, second: number) {
+  let a = Math.abs(Math.round(first));
+  let b = Math.abs(Math.round(second));
+  while (b > 0) {
+    const remainder = a % b;
+    a = b;
+    b = remainder;
+  }
+  return Math.max(a, 1);
 }
 
 function toQuantityValue(value: number | undefined): QuantityValue {

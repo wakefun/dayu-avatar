@@ -172,12 +172,28 @@ function normalizeImageDimensions(width: number, height: number) {
     nextHeight *= scale;
   }
 
-  return fitRoundedDimensions(nextWidth, nextHeight, maxPixels);
+  return fitRoundedDimensions(nextWidth, nextHeight, minPixels, maxPixels, maxAspectRatio);
 }
 
-function fitRoundedDimensions(width: number, height: number, maxPixels: number) {
+function fitRoundedDimensions(width: number, height: number, minPixels: number, maxPixels: number, maxAspectRatio: number) {
   let nextWidth = roundDownToMultipleOf16(width);
   let nextHeight = roundDownToMultipleOf16(height);
+
+  while (getLongShortRatio(nextWidth, nextHeight) > maxAspectRatio) {
+    if (nextWidth >= nextHeight) {
+      nextHeight += 16;
+    } else {
+      nextWidth += 16;
+    }
+  }
+
+  while (nextWidth * nextHeight < minPixels) {
+    if (nextWidth <= nextHeight) {
+      nextWidth += 16;
+    } else {
+      nextHeight += 16;
+    }
+  }
 
   while (nextWidth * nextHeight > maxPixels) {
     if (nextWidth >= nextHeight) {
@@ -191,6 +207,10 @@ function fitRoundedDimensions(width: number, height: number, maxPixels: number) 
     width: nextWidth,
     height: nextHeight,
   };
+}
+
+function getLongShortRatio(width: number, height: number) {
+  return Math.max(width, height) / Math.max(1, Math.min(width, height));
 }
 
 function roundDownToMultipleOf16(value: number) {
