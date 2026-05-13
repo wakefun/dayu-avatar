@@ -1,0 +1,5 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Frontend generation controls and UI constraints"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Generation task payload contract"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "OpenAI-compatible generation contract"}
+{"file": ".trellis/tasks/05-14-custom-aspect-ratio-support/research/openai-image-size-constraints.md", "reason": "OpenAI gpt-image-2 size constraints"}
