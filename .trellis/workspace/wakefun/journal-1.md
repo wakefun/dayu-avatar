@@ -335,3 +335,36 @@ Fixed Records page failed-record deletion so successful deletes stay hidden acro
 ### Next Steps
 
 - None - task complete
+
+
+## Session 11: Custom aspect ratio support
+
+**Date**: 2026-05-14
+**Task**: Custom aspect ratio support
+**Branch**: `main`
+
+### Summary
+
+Added custom generation ratio input, OpenAI-compatible size normalization on frontend/backend boundaries, synced specs, and verified lint/typecheck/build plus UI smoke test.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b3e7f33` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

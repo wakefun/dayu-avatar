@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 10
-- **Last Active**: 2026-05-09
+- **Total Sessions**: 11
+- **Last Active**: 2026-05-14
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~337 | Active |
+| `journal-1.md` | ~370 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 11 | 2026-05-14 | Custom aspect ratio support | `b3e7f33` | `main` |
 | 10 | 2026-05-09 | Fix failed record delete refresh | `4c1106f` | `main` |
 | 9 | 2026-05-08 | Clean task title model context | `50cfcf5` | `main` |
 | 8 | 2026-05-08 | Dayu Darkroom generation flow upgrade | `c251904` | `main` |
