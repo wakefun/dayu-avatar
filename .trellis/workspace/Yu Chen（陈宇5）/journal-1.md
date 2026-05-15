@@ -270,3 +270,36 @@ Updated local Trellis runtime from 0.5.13 to 0.5.15, tightened task archive auto
 ### Next Steps
 
 - None - task complete
+
+
+## Session 9: Add generated result fine-tune
+
+**Date**: 2026-05-15
+**Task**: Add generated result fine-tune
+**Branch**: `main`
+
+### Summary
+
+Added result-page fine-tune flow that creates derived generation tasks from completed result images, with backend validation, smoke coverage, specs, and browser verification.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d85e329` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
