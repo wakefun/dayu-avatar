@@ -36,7 +36,9 @@ export type AssetRow = {
   width: number | null;
   height: number | null;
   byte_size: number | null;
+  content_hash: string | null;
   created_at: string;
+  deleted_at: string | null;
 };
 
 export type TaskRow = {
@@ -62,6 +64,7 @@ export type TaskRow = {
   created_at: string;
   updated_at: string;
   completed_at: string | null;
+  deleted_at: string | null;
 };
 
 export type ResultRow = {
@@ -75,10 +78,12 @@ export type ResultRow = {
 
 export type RecordRow = TaskRow & {
   result_id: string | null;
+  result_saved_to_gallery: number | null;
   image_url: string | null;
   thumbnail_url: string | null;
   image_width: number | null;
   image_height: number | null;
+  image_content_hash: string | null;
 };
 
 export type GalleryRow = {
@@ -87,6 +92,7 @@ export type GalleryRow = {
   generation_result_id: string;
   is_favorited: number;
   saved_at: string;
+  deleted_at: string | null;
 };
 
 export type SessionRow = {

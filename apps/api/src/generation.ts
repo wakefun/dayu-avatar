@@ -1,6 +1,6 @@
 import { db, getOwnedTask, getResultByTaskId, getTask } from './database';
 import { defaultImageModel, defaultImageQuality, generationMode } from './config';
-import { createBinaryGeneratedAsset, createSeedAsset, createWebpThumbnail, deleteAsset, getThumbnailDimensions } from './assets';
+import { createBinaryGeneratedAsset, createSeedAsset, createWebpThumbnail, getThumbnailDimensions } from './assets';
 import { parseSize } from './image-utils';
 import { createGradientPng } from './mock-images';
 import {
@@ -140,15 +140,17 @@ export function ensureSeedTasks(userId: string) {
      error_code = 'GENERATION_FAILED', error_message = '当前任务未能顺利完成，请重新尝试。', created_at = ?, updated_at = ? WHERE id = ?`
   ).run(new Date(now - 1000 * 60 * 20).toISOString(), new Date(now - 1000 * 60 * 19).toISOString(), failed.id);
 
+  const canceledCreatedAt = new Date(now - 1000 * 60 * 10).toISOString();
+  const canceledUpdatedAt = new Date(now - 1000 * 60 * 9).toISOString();
   db.prepare(
-    `UPDATE generation_tasks SET status = 'canceled', progress_percent = 15, progress_step = '排队中',
-     created_at = ?, updated_at = ? WHERE id = ?`
-  ).run(new Date(now - 1000 * 60 * 10).toISOString(), new Date(now - 1000 * 60 * 9).toISOString(), canceled.id);
+    `UPDATE generation_tasks SET status = 'canceled', progress_percent = 15, progress_step = '任务已取消',
+     created_at = ?, updated_at = ?, completed_at = ?, deleted_at = ? WHERE id = ?`
+  ).run(canceledCreatedAt, canceledUpdatedAt, canceledUpdatedAt, canceledUpdatedAt, canceled.id);
 }
 
 export async function syncUserTasks(userId: string) {
   const activeTasks = db
-    .prepare("SELECT id FROM generation_tasks WHERE user_id = ? AND status IN ('queued', 'processing')")
+    .prepare("SELECT id FROM generation_tasks WHERE user_id = ? AND status IN ('queued', 'processing') AND deleted_at IS NULL")
     .all(userId) as Array<{ id: string }>;
 
   for (const task of activeTasks) {
@@ -213,7 +215,7 @@ export function finalizeMockTask(taskId: string) {
   try {
     ensureMockGenerationResult(taskId);
     db.prepare(
-      "UPDATE generation_tasks SET status = 'completed', progress_percent = 100, progress_step = '生成完成', error_code = NULL, error_message = NULL, updated_at = ?, completed_at = ? WHERE id = ?"
+      "UPDATE generation_tasks SET status = 'completed', progress_percent = 100, progress_step = '生成完成', error_code = NULL, error_message = NULL, updated_at = ?, completed_at = ? WHERE id = ? AND deleted_at IS NULL"
     ).run(nowIso(), nowIso(), taskId);
   } catch {
     db.prepare(
@@ -236,23 +238,17 @@ export function ensureMockGenerationResult(taskId: string) {
   const [width, height] = parseSize(task.size);
   const imageAsset = createMockGeneratedAsset(task.user_id, task.id, 'generated_result', width, height, task.prompt, false);
   const thumbnailSize = getThumbnailDimensions(width, height);
-  let thumbAsset: AssetRow;
-  try {
-    thumbAsset = createBinaryGeneratedAsset({
-      userId: task.user_id,
-      taskId: task.id,
-      category: 'generated_thumbnail',
-      buffer: createWebpThumbnail(imageAsset.storage_path, width, height),
-      mimeType: 'image/webp',
-      extension: '.webp',
-      width: thumbnailSize.width,
-      height: thumbnailSize.height,
-      fileNameSuffix: 'thumb',
-    });
-  } catch (error) {
-    deleteAsset(imageAsset);
-    throw error;
-  }
+  const thumbAsset = createBinaryGeneratedAsset({
+    userId: task.user_id,
+    taskId: task.id,
+    category: 'generated_thumbnail',
+    buffer: createWebpThumbnail(imageAsset.storage_path, width, height),
+    mimeType: 'image/webp',
+    extension: '.webp',
+    width: thumbnailSize.width,
+    height: thumbnailSize.height,
+    fileNameSuffix: 'thumb',
+  });
   const resultId = createId('res');
 
   db.prepare(
@@ -290,7 +286,7 @@ export async function runOpenAiGeneration(taskId: string) {
 
   if (getResultByTaskId(taskId)) {
     db.prepare(
-      "UPDATE generation_tasks SET status = 'completed', progress_percent = 100, progress_step = '生成完成', updated_at = ?, completed_at = ? WHERE id = ?"
+      "UPDATE generation_tasks SET status = 'completed', progress_percent = 100, progress_step = '生成完成', updated_at = ?, completed_at = ? WHERE id = ? AND deleted_at IS NULL"
     ).run(nowIso(), nowIso(), taskId);
     return;
   }
@@ -298,16 +294,28 @@ export async function runOpenAiGeneration(taskId: string) {
   try {
     const plannedPrompt = await buildImageGenerationPrompt(latestTask);
     await updateTaskSummaryFromPlannedPrompt(latestTask, plannedPrompt);
+    if (!getTask(taskId)) {
+      return;
+    }
     const generated = await generateOpenAiImage(latestTask, plannedPrompt);
+    if (!getTask(taskId)) {
+      return;
+    }
     await persistGeneratedResult(latestTask, generated);
+    if (!getTask(taskId)) {
+      return;
+    }
     db.prepare(
-      "UPDATE generation_tasks SET status = 'completed', progress_percent = 100, progress_step = '生成完成', error_code = NULL, error_message = NULL, updated_at = ?, completed_at = ? WHERE id = ?"
+      "UPDATE generation_tasks SET status = 'completed', progress_percent = 100, progress_step = '生成完成', error_code = NULL, error_message = NULL, updated_at = ?, completed_at = ? WHERE id = ? AND deleted_at IS NULL"
     ).run(nowIso(), nowIso(), taskId);
   } catch (error) {
+    if (!getTask(taskId)) {
+      return;
+    }
     const failure = normalizeOpenAiGenerationFailure(error);
     logOpenAiGenerationFailure(latestTask, failure);
     db.prepare(
-      "UPDATE generation_tasks SET status = 'failed', progress_percent = 96, progress_step = '高清细化中', error_code = 'GENERATION_FAILED', error_message = ?, updated_at = ? WHERE id = ?"
+      "UPDATE generation_tasks SET status = 'failed', progress_percent = 96, progress_step = '高清细化中', error_code = 'GENERATION_FAILED', error_message = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL"
     ).run(failure.taskMessage, nowIso(), taskId);
   }
 }
@@ -344,7 +352,6 @@ export async function persistGeneratedResult(task: TaskRow, image: GeneratedImag
       fileNameSuffix: 'thumb',
     });
   } catch (error) {
-    deleteAsset(imageAsset);
     throw createOpenAiGenerationFailure({
       status: null,
       providerCode: null,
@@ -366,7 +373,7 @@ export async function persistGeneratedResult(task: TaskRow, image: GeneratedImag
 export async function getQueueItems(userId: string) {
   await syncUserTasks(userId);
   const rows = db
-    .prepare('SELECT * FROM generation_tasks WHERE user_id = ? ORDER BY datetime(created_at) DESC')
+    .prepare("SELECT * FROM generation_tasks WHERE user_id = ? AND deleted_at IS NULL AND status != 'canceled' ORDER BY datetime(created_at) DESC")
     .all(userId) as TaskRow[];
 
   return rows.map((task) => ({
@@ -387,13 +394,13 @@ export async function getRecordPage(userId: string, limit: number, cursor: numbe
   await syncUserTasks(userId);
   const rows = db
     .prepare(
-      `SELECT t.*, r.id as result_id, image_asset.public_url as image_url, thumb_asset.public_url as thumbnail_url,
-              image_asset.width as image_width, image_asset.height as image_height
+      `SELECT t.*, r.id as result_id, r.saved_to_gallery as result_saved_to_gallery, image_asset.public_url as image_url, thumb_asset.public_url as thumbnail_url,
+              image_asset.width as image_width, image_asset.height as image_height, image_asset.content_hash as image_content_hash
        FROM generation_tasks t
        LEFT JOIN generation_results r ON r.task_id = t.id
-       LEFT JOIN file_assets image_asset ON image_asset.id = r.image_asset_id
-       LEFT JOIN file_assets thumb_asset ON thumb_asset.id = r.thumbnail_asset_id
-       WHERE t.user_id = ?
+       LEFT JOIN file_assets image_asset ON image_asset.id = r.image_asset_id AND image_asset.deleted_at IS NULL
+       LEFT JOIN file_assets thumb_asset ON thumb_asset.id = r.thumbnail_asset_id AND thumb_asset.deleted_at IS NULL
+       WHERE t.user_id = ? AND t.deleted_at IS NULL AND t.status != 'canceled'
        ORDER BY datetime(t.created_at) DESC, t.id DESC
        LIMIT ? OFFSET ?`
     )

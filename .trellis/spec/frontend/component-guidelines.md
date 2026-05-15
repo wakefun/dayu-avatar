@@ -81,7 +81,7 @@ import {
 - History “再次生成” should navigate back to `/` with editable prefilled draft state, not immediately create a backend retry task.
 - Gallery cards are image-only masonry items in two columns; do not render per-card text metadata in the grid itself.
 - Gallery cards show a pink flower marker only for favorited items.
-- Gallery actions (favorite, download, delete, set-as-avatar, generated time) belong in the fullscreen preview footer, not inside the masonry card itself.
+- Gallery actions (favorite, download, remove-from-gallery, set-as-avatar, generated time, jump-to-record) belong in the fullscreen preview footer, not inside the masonry card itself.
 - Result-page image display should preserve original width/height with `object-fit: contain`; do not crop to a fixed portrait frame.
 - Result-page generation parameters should show available `personalReferenceAssets` and `styleReferenceAssets` as labeled source/reference thumbnails before the parameter rows; thumbnails should reuse fullscreen preview behavior and must not require extra API calls.
 - Sidebar install action is a UI affordance that calls the browser install prompt when available and otherwise remains harmless.
@@ -103,10 +103,13 @@ import {
 - Drawer is closed -> overlay and drawer descendants must not remain tabbable.
 - Drawer is open -> provide an overlay/close path and real navigation links.
 - Upload control -> use image-specific accept behavior and show selected file state.
-- Destructive gallery delete -> keep it an explicit button action.
+- Destructive gallery remove -> keep it an explicit preview-footer button action and show an app-level confirmation dialog before calling the API.
+- Destructive record delete -> show an app-level confirmation dialog; if `result.savedToGallery` is true, copy must mention the related gallery image will also be removed.
+- Active task cancel -> show an app-level confirmation dialog and hide the task after API success.
 - History regenerate should preserve prompt/style/reference/generation settings in navigation state; missing fields break home-page prefill.
 - Fullscreen preview footer actions must stay touch-reachable and cannot depend on hover-only controls.
 - Fullscreen preview dialog must have an accessible label, focus an explicit close control on open, and close on Escape.
+- Confirmation dialogs for destructive record/gallery/cancel actions must focus a safe cancel/keep button on open and close on Escape.
 - Result image styling must use real image dimensions when available; hard-coded aspect ratio reintroduces cropping.
 - Result-page reference thumbnails should handle nullable asset dimensions and stay within the mobile viewport without horizontal document overflow.
 - Gallery masonry cards should not add captions or inline action rows back into the grid.
@@ -118,10 +121,13 @@ import {
 - Good: `UploadCard` owns the square 1/2/3-image layout, add-more overlay, remove buttons, and fullscreen-preview callbacks for both personal and style references.
 - Good: `HistoryCard` exposes a single bottom “再次生成” action while passing prefill-ready task data back to the home page.
 - Good: `GalleryCard` is just an image button plus optional favorite flower marker; fullscreen actions live in the shared lightbox footer.
-- Good: after `await api.deleteRecord(item.id)`, add `item.id` to a local tombstone set before merging any streamed records payloads.
+- Good: gallery "移出图库" and record/task destructive actions use custom app dialogs, not `window.confirm`.
+- Good: after `await api.deleteRecord(item.id)` or `await api.cancelTask(item.id)`, add `item.id` to a local tombstone set before merging any streamed records payloads.
 - Base: `ArtworkCard` renders image, metadata, and action buttons without hidden hover-only controls.
 - Bad: make the entire visual card clickable and nest retry/delete controls inside it.
-- Bad: remove a deleted record from local state once but let the next SSE first-page payload merge it back into the list.
+- Bad: remove a deleted/canceled record from local state once but let the next SSE first-page payload merge it back into the list.
+- Bad: put gallery remove/detail actions into the masonry grid card instead of the fullscreen preview footer.
+- Bad: use browser `confirm()` for destructive actions; it bypasses app styling, focus, and copy requirements.
 - Bad: reintroduce style suggestion chips or automatic snippet insertion on the custom text card.
 - Bad: reintroduce a separate “选择图片” button below the square upload area once the overlay add affordance exists.
 - Bad: show a disabled sidebar “添加到桌面” action when the install prompt is unavailable; hide the action instead.
@@ -136,6 +142,7 @@ import {
 - For live lists with destructive row actions, assert the row stays absent after the next SSE/streamed refresh payload.
 - For auto ratio, assert the first reference image ratio snaps to the nearest supported ratio, source image dimensions are ignored, and missing reference dimensions fall back to `3:4`.
 - Add UI assertions for 1/2/3-image reference layouts, remove actions, lightbox open/close, history regenerate prefill navigation, queue completed/failed cards hiding progress bars, result image using native aspect ratio, result-page reference thumbnails opening lightbox without page overflow, and gallery masonry cards remaining image-only.
+- Add UI assertions for completed-record delete confirmation with gallery warning, active-task cancel confirmation, gallery preview record jump, and gallery remove confirmation.
 
 ### 7. Wrong vs Correct
 

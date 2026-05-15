@@ -28,6 +28,7 @@ export function mapAsset(asset: AssetRow) {
     height: asset.height,
     fileName: asset.file_name,
     fileUrl: asset.public_url,
+    contentHash: asset.content_hash,
     createdAt: asset.created_at,
   };
 }
@@ -81,6 +82,7 @@ export function mapResult(result: ResultRow) {
     thumbnailUrl: thumb?.public_url ?? null,
     width: image?.width ?? null,
     height: image?.height ?? null,
+    contentHash: image?.content_hash ?? null,
     savedToGallery: Boolean(result.saved_to_gallery),
     createdAt: result.created_at,
   };
@@ -93,9 +95,10 @@ export function mapGalleryItem(itemId: string) {
               thumb_asset.public_url as thumbnail_url
        FROM gallery_items g
        JOIN generation_results r ON r.id = g.generation_result_id
-       JOIN file_assets image_asset ON image_asset.id = r.image_asset_id
-       LEFT JOIN file_assets thumb_asset ON thumb_asset.id = r.thumbnail_asset_id
-       WHERE g.id = ?`
+       JOIN file_assets image_asset ON image_asset.id = r.image_asset_id AND image_asset.deleted_at IS NULL
+       LEFT JOIN file_assets thumb_asset ON thumb_asset.id = r.thumbnail_asset_id AND thumb_asset.deleted_at IS NULL
+       JOIN generation_tasks t ON t.id = r.task_id
+       WHERE g.id = ? AND g.deleted_at IS NULL AND t.deleted_at IS NULL`
     )
     .get(itemId) as (GalleryRow & { task_id: string; image_url: string; image_width: number | null; image_height: number | null; thumbnail_url: string | null }) | undefined;
 
@@ -149,6 +152,8 @@ export function mapRecordItem(task: RecordRow) {
           thumbnailUrl: task.thumbnail_url,
           width: task.image_width,
           height: task.image_height,
+          contentHash: task.image_content_hash,
+          savedToGallery: Boolean(task.result_saved_to_gallery),
           createdAt: task.completed_at ?? task.updated_at,
         }
       : null,

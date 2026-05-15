@@ -100,10 +100,14 @@ export function RecordsPage() {
     });
   };
 
-  const deleteFailedRecord = async (item: RecordItem) => {
+  const removeRecord = async (item: RecordItem) => {
     try {
       setError(null);
-      await api.deleteRecord(item.id);
+      if (isActiveStatus(item.status)) {
+        await api.cancelTask(item.id);
+      } else {
+        await api.deleteRecord(item.id);
+      }
       deletedRecordIdsRef.current.add(item.id);
       setItems((current) => current.filter((record) => record.id !== item.id));
       setDeleteTarget(null);
@@ -165,7 +169,7 @@ export function RecordsPage() {
       <DeleteRecordDialog
         item={deleteTarget}
         onCancel={() => setDeleteTarget(null)}
-        onConfirm={(item) => void deleteFailedRecord(item)}
+        onConfirm={(item) => void removeRecord(item)}
       />
     </div>
   );
@@ -219,10 +223,12 @@ function DeleteRecordDialog({ item, onCancel, onConfirm }: DeleteRecordDialogPro
         </div>
         <div className="relative grid gap-2">
           <h2 id="delete-record-title" className="m-0 text-lg font-semibold text-[#2f2724]">
-            删除这条失败记录？
+            {isActiveStatus(item.status) ? '取消这个任务？' : '删除这条记录？'}
           </h2>
           <p id="delete-record-description" className="m-0 text-sm leading-6 text-[#6b5f59]">
-            “{item.promptSummary}” 将从我的记录中移除，删除后无法恢复。
+            {isActiveStatus(item.status)
+              ? `“${item.promptSummary}” 将停止生成并从我的记录中移除。`
+              : `“${item.promptSummary}” 将从我的记录中移除，删除后无法恢复。${item.result?.savedToGallery ? '这张作品已保存到图库，图库中的对应图片也会一并移除。' : ''}`}
           </p>
         </div>
         <div className="relative flex flex-wrap justify-center gap-2.5">
@@ -230,7 +236,7 @@ function DeleteRecordDialog({ item, onCancel, onConfirm }: DeleteRecordDialogPro
             先保留
           </button>
           <button type="button" className={chipButtonClass('danger')} onClick={() => onConfirm(item)}>
-            确认删除
+            {isActiveStatus(item.status) ? '确认取消' : '确认删除'}
           </button>
         </div>
       </div>
@@ -331,14 +337,19 @@ function RecordCard({ item, index, onOpen, onRetry, onRegenerate, onPreview, onD
           </button>
         ) : null}
         {item.status === 'failed' ? (
-          <>
-            <button type="button" className={chipButtonClass()} onClick={() => onRetry(item)}>
-              重试任务
-            </button>
-            <button type="button" className={chipButtonClass('danger')} onClick={() => onDelete(item)}>
-              删除记录
-            </button>
-          </>
+          <button type="button" className={chipButtonClass()} onClick={() => onRetry(item)}>
+            重试任务
+          </button>
+        ) : null}
+        {item.status === 'completed' || item.status === 'failed' ? (
+          <button type="button" className={chipButtonClass('danger')} onClick={() => onDelete(item)}>
+            删除记录
+          </button>
+        ) : null}
+        {showProgress ? (
+          <button type="button" className={chipButtonClass('danger')} onClick={() => onDelete(item)}>
+            取消任务
+          </button>
         ) : null}
         {!showProgress ? (
           <button type="button" className={chipButtonClass()} onClick={() => onRegenerate(item)}>

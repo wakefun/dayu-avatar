@@ -82,6 +82,7 @@ export const api = {
       `/api/generation-tasks/${taskId}/progress`
     ),
   getTaskResult: (taskId: string) => request<{ result: GenerationResult }>(`/api/generation-tasks/${taskId}/result`),
+  cancelTask: (taskId: string) => request<{ success: true }>(`/api/generation-tasks/${taskId}/cancel`, { method: 'POST', body: JSON.stringify({}) }),
   retryTask: (taskId: string) => request<{ task: GenerationTask }>(`/api/generation-tasks/${taskId}/retry`, { method: 'POST', body: JSON.stringify({}) }),
   getRecords: (cursor: number | null = null, limit = 10) => {
     const params = new URLSearchParams({ limit: String(limit) });

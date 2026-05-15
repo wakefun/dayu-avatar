@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PageSection } from '../components/PageSection';
 import { api } from '../lib/api';
 import type { TaskStreamPayload } from '../lib/types';
-import { cx, pageStackClass, primaryButtonClass, secondaryButtonClass } from '../components/ui';
+import { chipButtonClass, cx, pageStackClass, primaryButtonClass, secondaryButtonClass } from '../components/ui';
 
 const steps = ['理解创作需求', '规划生图提示词', '生成暗房作品', '高清细化中'];
 
@@ -12,6 +12,8 @@ export function LoadingPage() {
   const navigate = useNavigate();
   const [task, setTask] = useState<TaskStreamPayload['task'] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [canceling, setCanceling] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
 
   useEffect(() => {
     const eventSource = api.streamTask(taskId);
@@ -51,6 +53,23 @@ export function LoadingPage() {
 
     return () => eventSource.close();
   }, [navigate, taskId]);
+
+  const cancelTask = async () => {
+    if (!task) {
+      return;
+    }
+    try {
+      setCanceling(true);
+      setError(null);
+      await api.cancelTask(task.id);
+      navigate('/records', { replace: true });
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : '取消任务失败');
+    } finally {
+      setCanceling(false);
+      setCancelDialogOpen(false);
+    }
+  };
 
   const isTerminalFailure = task?.status === 'failed' || task?.status === 'canceled';
   const failedTaskId = task?.status === 'failed' ? task.id : null;
@@ -127,12 +146,90 @@ export function LoadingPage() {
               })}
             </div>
             {error ? <div className="mt-2 text-sm text-[#b36f67]">{error}</div> : null}
-            <button type="button" className={`${secondaryButtonClass} mt-3`} onClick={() => navigate('/records')}>
-              查看我的记录
-            </button>
+            <div className="mt-3 grid gap-2.5">
+              <button type="button" className={secondaryButtonClass} onClick={() => navigate('/records')}>
+                查看我的记录
+              </button>
+              <button type="button" className={secondaryButtonClass} disabled={canceling || !task} onClick={() => setCancelDialogOpen(true)}>
+                {canceling ? '正在取消...' : '取消任务'}
+              </button>
+            </div>
           </PageSection>
         </>
       )}
+      <CancelTaskDialog
+        open={cancelDialogOpen}
+        promptSummary={task?.promptSummary ?? '当前任务'}
+        onCancel={() => setCancelDialogOpen(false)}
+        onConfirm={() => void cancelTask()}
+      />
+    </div>
+  );
+}
+
+type CancelTaskDialogProps = {
+  open: boolean;
+  promptSummary: string;
+  onCancel: () => void;
+  onConfirm: () => void;
+};
+
+function CancelTaskDialog({ open, promptSummary, onCancel, onConfirm }: CancelTaskDialogProps) {
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    cancelButtonRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onCancel();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, onCancel]);
+
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[90] grid place-items-center bg-[rgba(33,27,24,0.54)] px-[18px] pt-[max(18px,env(safe-area-inset-top))] pb-[max(18px,env(safe-area-inset-bottom))] backdrop-blur-[10px]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="cancel-task-title"
+      aria-describedby="cancel-task-description"
+      onClick={onCancel}
+    >
+      <div
+        className="relative grid w-full max-w-[360px] gap-4 overflow-hidden rounded-[28px] border border-white/72 bg-[linear-gradient(145deg,rgba(255,255,255,0.94),rgba(255,244,236,0.88))] p-5 text-center shadow-[0_28px_72px_rgba(42,32,28,0.28),inset_0_1px_0_rgba(255,255,255,0.9)]"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="relative mx-auto grid h-12 w-12 place-items-center rounded-full bg-[rgba(179,111,103,0.12)] text-xl text-[#b36f67] shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+          !
+        </div>
+        <div className="relative grid gap-2">
+          <h2 id="cancel-task-title" className="m-0 text-lg font-semibold text-[#2f2724]">
+            取消这个任务？
+          </h2>
+          <p id="cancel-task-description" className="m-0 text-sm leading-6 text-[#6b5f59]">
+            “{promptSummary}” 将停止生成并从我的记录中移除。
+          </p>
+        </div>
+        <div className="relative flex flex-wrap justify-center gap-2.5">
+          <button ref={cancelButtonRef} type="button" className={chipButtonClass()} onClick={onCancel}>
+            继续等待
+          </button>
+          <button type="button" className={chipButtonClass('danger')} onClick={onConfirm}>
+            确认取消
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -7,7 +7,7 @@ const apiRoot = path.resolve(__dirname, '..');
 export const repoRoot = path.resolve(apiRoot, '../..');
 loadEnvFile(path.join(repoRoot, '.env'));
 
-export const dataRoot = path.join(repoRoot, 'data');
+export const dataRoot = process.env.DAYU_DATA_ROOT ? path.resolve(process.env.DAYU_DATA_ROOT) : path.join(repoRoot, 'data');
 export const uploadsRoot = path.join(dataRoot, 'uploads');
 export const generatedRoot = path.join(dataRoot, 'generated');
 export const webDistRoot = path.join(repoRoot, 'apps/web/dist');

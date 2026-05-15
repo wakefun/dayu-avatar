@@ -55,7 +55,9 @@ export function initSchema() {
       width INTEGER,
       height INTEGER,
       byte_size INTEGER,
-      created_at TEXT NOT NULL
+      content_hash TEXT,
+      created_at TEXT NOT NULL,
+      deleted_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS generation_tasks (
@@ -80,7 +82,8 @@ export function initSchema() {
       source_task_id TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
-      completed_at TEXT
+      completed_at TEXT,
+      deleted_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS generation_results (
@@ -97,13 +100,18 @@ export function initSchema() {
       user_id TEXT NOT NULL,
       generation_result_id TEXT NOT NULL UNIQUE,
       is_favorited INTEGER NOT NULL DEFAULT 0,
-      saved_at TEXT NOT NULL
+      saved_at TEXT NOT NULL,
+      deleted_at TEXT
     );
   `);
+  ensureColumn('file_assets', 'content_hash', 'TEXT');
+  ensureColumn('file_assets', 'deleted_at', 'TEXT');
   ensureColumn('generation_tasks', 'summary', 'TEXT');
   ensureColumn('generation_tasks', 'personal_reference_asset_ids_json', 'TEXT');
   ensureColumn('generation_tasks', 'style_reference_asset_ids_json', 'TEXT');
+  ensureColumn('generation_tasks', 'deleted_at', 'TEXT');
   ensureColumn('generation_results', 'thumbnail_asset_id', 'TEXT');
+  ensureColumn('gallery_items', 'deleted_at', 'TEXT');
 }
 
 function ensureColumn(tableName: string, columnName: string, definition: string) {
@@ -124,19 +132,19 @@ export function getSession(sessionId: string) {
 }
 
 export function getAsset(assetId: string) {
-  return db.prepare('SELECT * FROM file_assets WHERE id = ?').get(assetId) as AssetRow | undefined;
+  return db.prepare('SELECT * FROM file_assets WHERE id = ? AND deleted_at IS NULL').get(assetId) as AssetRow | undefined;
 }
 
 export function getOwnedAsset(userId: string, assetId: string) {
-  return db.prepare('SELECT * FROM file_assets WHERE id = ? AND user_id = ?').get(assetId, userId) as AssetRow | undefined;
+  return db.prepare('SELECT * FROM file_assets WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(assetId, userId) as AssetRow | undefined;
 }
 
 export function getTask(taskId: string) {
-  return db.prepare('SELECT * FROM generation_tasks WHERE id = ?').get(taskId) as TaskRow | undefined;
+  return db.prepare('SELECT * FROM generation_tasks WHERE id = ? AND deleted_at IS NULL').get(taskId) as TaskRow | undefined;
 }
 
 export function getOwnedTask(userId: string, taskId: string) {
-  return db.prepare('SELECT * FROM generation_tasks WHERE id = ? AND user_id = ?').get(taskId, userId) as TaskRow | undefined;
+  return db.prepare('SELECT * FROM generation_tasks WHERE id = ? AND user_id = ? AND deleted_at IS NULL').get(taskId, userId) as TaskRow | undefined;
 }
 
 export function getResultByTaskId(taskId: string) {
@@ -144,5 +152,5 @@ export function getResultByTaskId(taskId: string) {
 }
 
 export function getGalleryItem(itemId: string) {
-  return db.prepare('SELECT * FROM gallery_items WHERE id = ?').get(itemId) as GalleryRow | undefined;
+  return db.prepare('SELECT * FROM gallery_items WHERE id = ? AND deleted_at IS NULL').get(itemId) as GalleryRow | undefined;
 }

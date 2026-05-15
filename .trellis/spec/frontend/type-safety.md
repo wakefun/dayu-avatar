@@ -23,6 +23,7 @@ export type Asset = {
   height: number | null;
   fileName: string;
   fileUrl: string;
+  contentHash: string | null;
 };
 
 export type GenerationTask = {
@@ -65,8 +66,12 @@ api.createTask({
 - Records items must carry `prompt`, `styleTags`, `personalReferenceAssets`, `styleReferenceAssets`, and `generationParams` so navigation state can prefill the generation page, including recovering custom ratio mode from stored sizes that are not close to preset ratios.
 - Records responses must include `pagination.nextCursor` and active terminal status data; the records page merges the SSE first page with paged results instead of choosing between queue and history shapes.
 - Result/gallery/records image payloads should carry both `thumbnailUrl` and `imageUrl` when available; UI previews prefer `thumbnailUrl`, while download actions use `imageUrl`.
+- Asset/result/record image payloads carry `contentHash: string | null`; UI can display/debug it but must not reconstruct storage paths from it.
+- Record result payloads include `savedToGallery` so delete confirmation can warn only when deleting a record will also remove a visible gallery entry.
 - Result routes must fetch task status before fetching `/result`; queued/processing tasks redirect to loading, and failed/canceled tasks show terminal copy instead of claiming a result is ready.
+- `api.cancelTask(taskId)` posts to `/api/generation-tasks/:taskId/cancel`; after success, callers navigate away or filter the task locally because normal record/task APIs hide it.
 - Gallery items must carry `width` and `height` so masonry cards and fullscreen preview preserve image aspect ratio.
+- Gallery preview actions include a record-detail jump using `taskId`, and gallery remove calls `api.deleteGallery(itemId)` through an app-level confirmation.
 - `api.setAvatarFromGallery(galleryItemId)` returns `{ user }`; callers should refresh topbar/settings avatar from that response rather than guessing the URL.
 
 ### 4. Validation & Error Matrix
@@ -76,15 +81,18 @@ api.createTask({
 - Backend returns only legacy single-id fields for old data -> frontend should rely on array fields already normalized by the API and avoid reconstructing arrays itself.
 - Result route opened for a queued or processing task -> redirect to `/generate/loading/:taskId` before requesting the result endpoint.
 - Result route opened for a failed or canceled task -> show terminal error/canceled copy and do not call `/api/generation-tasks/:taskId/result`.
+- Canceled task disappears from records after cancel -> keep a local tombstone/filter so SSE or pagination cannot re-add it before backend filters catch up.
+- Deleting a completed record with `result.savedToGallery` -> confirmation copy must mention the related gallery entry will also be removed.
 - `setAvatarFromGallery` fails -> keep existing avatar UI until a successful response arrives.
 
 ### 5. Good/Base/Bad Cases
 
 - Good: `GeneratePage` stores source assets and reference assets separately, then sends their id arrays plus `prompt` into `api.createTask`.
 - Good: `GeneratePage` resolves `auto` from the first reference asset only and snaps it to a supported common ratio before computing `generationParams.size`.
-- Good: `RecordsPage` consumes `RecordsResponse`, renders queued/processing/completed/failed/canceled items together, and paginates with `nextCursor`.
+- Good: `RecordsPage` consumes `RecordsResponse`, renders queued/processing/completed/failed items together, and paginates with `nextCursor`; canceled tasks are hidden after cancel.
 - Good: `GalleryPage` uses server-provided image dimensions rather than hard-coded portrait ratios.
-- Base: image preview components accept nullable dimensions and degrade to CSS defaults when missing.
+- Good: gallery preview offers "查看记录" from `taskId` and "移出图库" through a confirmation dialog, not inline card controls.
+- Base: image preview components accept nullable dimensions/hash values and degrade to CSS defaults when missing.
 - Bad: building queue/history summary text from raw prompt in the component layer.
 - Bad: duplicating API payload shapes in each page component instead of importing shared types.
 
@@ -94,6 +102,8 @@ api.createTask({
 - Add assertions that task creation includes array-based source/reference asset ids and never includes `styleReferenceAnalysis`.
 - Add assertions that `auto` ratio ignores source image dimensions, snaps the first reference image ratio to the nearest supported ratio, and falls back to `3:4` without reference dimensions.
 - Add assertions that gallery/result/reference images still render when width/height are null.
+- Add assertions that cancel task, delete record, and remove gallery call typed API helpers and keep rows hidden after stream/list refresh.
+- Add assertions that completed-record delete warning appears only when `savedToGallery` is true.
 - Add assertions that avatar updates refresh `user.avatarUrl` from the API response.
 
 ### 7. Wrong vs Correct

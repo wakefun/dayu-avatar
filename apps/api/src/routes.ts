@@ -494,6 +494,30 @@ export function registerApiRoutes(app: Express) {
     }
   });
 
+  app.post('/api/generation-tasks/:taskId/cancel', requireAuth, (req, res) => {
+    const taskId = getRouteParam(req.params.taskId);
+    const task = getOwnedTask(req.session.userId!, taskId);
+
+    if (!task) {
+      sendError(res, 404, 'NOT_FOUND', 'task not found');
+      return;
+    }
+
+    if (isTerminalTaskStatus(task.status)) {
+      sendError(res, 409, 'INVALID_STATE', 'only active tasks can be canceled');
+      return;
+    }
+
+    const now = nowIso();
+    db.prepare("UPDATE generation_tasks SET status = 'canceled', progress_step = '任务已取消', updated_at = ?, completed_at = ?, deleted_at = ? WHERE id = ?").run(
+      now,
+      now,
+      now,
+      task.id
+    );
+    res.json({ success: true });
+  });
+
   app.post('/api/generation-tasks/:taskId/retry', requireAuth, (req, res) => {
     const taskId = getRouteParam(req.params.taskId);
     const sourceTask = getOwnedTask(req.session.userId!, taskId);
@@ -544,12 +568,22 @@ export function registerApiRoutes(app: Express) {
       return;
     }
 
-    if (task.status !== 'failed') {
-      sendError(res, 409, 'INVALID_STATE', 'only failed records can be deleted');
+    if (task.status === 'queued' || task.status === 'processing') {
+      sendError(res, 409, 'INVALID_STATE', 'cancel active tasks before deleting them');
       return;
     }
 
-    db.prepare('DELETE FROM generation_tasks WHERE id = ?').run(task.id);
+    const result = getResultByTaskId(task.id);
+    const now = nowIso();
+    db.prepare('UPDATE generation_tasks SET deleted_at = ?, updated_at = ? WHERE id = ?').run(now, now, task.id);
+    if (result) {
+      db.prepare('UPDATE gallery_items SET deleted_at = ? WHERE generation_result_id = ? AND user_id = ? AND deleted_at IS NULL').run(
+        now,
+        result.id,
+        req.session.userId!
+      );
+      db.prepare('UPDATE generation_results SET saved_to_gallery = 0 WHERE id = ?').run(result.id);
+    }
     res.json({ success: true });
   });
 
@@ -664,8 +698,8 @@ export function registerApiRoutes(app: Express) {
           `SELECT t.*, r.id as result_id, image_asset.public_url as result_image_url
            FROM generation_tasks t
            LEFT JOIN generation_results r ON r.task_id = t.id
-           LEFT JOIN file_assets image_asset ON image_asset.id = r.image_asset_id
-           WHERE t.user_id = ?
+           LEFT JOIN file_assets image_asset ON image_asset.id = r.image_asset_id AND image_asset.deleted_at IS NULL
+           WHERE t.user_id = ? AND t.deleted_at IS NULL AND t.status != 'canceled'
            ORDER BY datetime(t.created_at) DESC`
         )
         .all(req.session.userId!) as Array<TaskRow & { result_id: string | null; result_image_url: string | null }>;
@@ -706,9 +740,10 @@ export function registerApiRoutes(app: Express) {
                 thumb_asset.public_url as thumbnail_url
          FROM gallery_items g
          JOIN generation_results r ON r.id = g.generation_result_id
-         JOIN file_assets image_asset ON image_asset.id = r.image_asset_id
-         LEFT JOIN file_assets thumb_asset ON thumb_asset.id = r.thumbnail_asset_id
-         WHERE g.user_id = ?
+         JOIN file_assets image_asset ON image_asset.id = r.image_asset_id AND image_asset.deleted_at IS NULL
+         LEFT JOIN file_assets thumb_asset ON thumb_asset.id = r.thumbnail_asset_id AND thumb_asset.deleted_at IS NULL
+         JOIN generation_tasks t ON t.id = r.task_id
+         WHERE g.user_id = ? AND g.deleted_at IS NULL AND t.deleted_at IS NULL
          ORDER BY datetime(g.saved_at) DESC`
       )
       .all(req.session.userId!) as Array<GalleryRow & { task_id: string; image_url: string; image_width: number | null; image_height: number | null; thumbnail_url: string | null }>;
@@ -739,7 +774,7 @@ export function registerApiRoutes(app: Express) {
       .prepare(
         `SELECT r.* FROM generation_results r
          JOIN generation_tasks t ON t.id = r.task_id
-         WHERE r.id = ? AND t.user_id = ?`
+         WHERE r.id = ? AND t.user_id = ? AND t.deleted_at IS NULL`
       )
       .get(generationResultId, req.session.userId!) as ResultRow | undefined;
 
@@ -748,20 +783,24 @@ export function registerApiRoutes(app: Express) {
       return;
     }
 
-    const existing = db.prepare('SELECT * FROM gallery_items WHERE generation_result_id = ?').get(generationResultId) as GalleryRow | undefined;
-    if (existing) {
+    const existing = db.prepare('SELECT * FROM gallery_items WHERE generation_result_id = ? AND user_id = ?').get(generationResultId, req.session.userId!) as GalleryRow | undefined;
+    if (existing?.deleted_at === null) {
       res.json({ item: mapGalleryItem(existing.id) });
       return;
     }
 
     const now = nowIso();
-    const id = createId('gal');
-    db.prepare('INSERT INTO gallery_items (id, user_id, generation_result_id, is_favorited, saved_at) VALUES (?, ?, ?, 0, ?)').run(
-      id,
-      req.session.userId!,
-      generationResultId,
-      now
-    );
+    const id = existing?.id ?? createId('gal');
+    if (existing) {
+      db.prepare('UPDATE gallery_items SET is_favorited = 0, saved_at = ?, deleted_at = NULL WHERE id = ?').run(now, existing.id);
+    } else {
+      db.prepare('INSERT INTO gallery_items (id, user_id, generation_result_id, is_favorited, saved_at, deleted_at) VALUES (?, ?, ?, 0, ?, NULL)').run(
+        id,
+        req.session.userId!,
+        generationResultId,
+        now
+      );
+    }
     db.prepare('UPDATE generation_results SET saved_to_gallery = 1 WHERE id = ?').run(generationResultId);
 
     res.status(201).json({ item: mapGalleryItem(id) });
@@ -770,7 +809,7 @@ export function registerApiRoutes(app: Express) {
   app.patch('/api/gallery-items/:itemId', requireAuth, (req, res) => {
     const itemId = getRouteParam(req.params.itemId);
     const item = db
-      .prepare('SELECT * FROM gallery_items WHERE id = ? AND user_id = ?')
+      .prepare('SELECT * FROM gallery_items WHERE id = ? AND user_id = ? AND deleted_at IS NULL')
       .get(itemId, req.session.userId!) as GalleryRow | undefined;
 
     if (!item) {
@@ -790,8 +829,9 @@ export function registerApiRoutes(app: Express) {
         `SELECT image_asset.id as asset_id
          FROM gallery_items g
          JOIN generation_results r ON r.id = g.generation_result_id
-         JOIN file_assets image_asset ON image_asset.id = r.image_asset_id
-         WHERE g.id = ? AND g.user_id = ?`
+         JOIN generation_tasks t ON t.id = r.task_id
+         JOIN file_assets image_asset ON image_asset.id = r.image_asset_id AND image_asset.deleted_at IS NULL
+         WHERE g.id = ? AND g.user_id = ? AND g.deleted_at IS NULL AND t.deleted_at IS NULL`
       )
       .get(galleryItemId, req.session.userId!) as { asset_id: string } | undefined;
 
@@ -807,7 +847,7 @@ export function registerApiRoutes(app: Express) {
   app.delete('/api/gallery-items/:itemId', requireAuth, (req, res) => {
     const itemId = getRouteParam(req.params.itemId);
     const item = db
-      .prepare('SELECT * FROM gallery_items WHERE id = ? AND user_id = ?')
+      .prepare('SELECT * FROM gallery_items WHERE id = ? AND user_id = ? AND deleted_at IS NULL')
       .get(itemId, req.session.userId!) as GalleryRow | undefined;
 
     if (!item) {
@@ -815,7 +855,7 @@ export function registerApiRoutes(app: Express) {
       return;
     }
 
-    db.prepare('DELETE FROM gallery_items WHERE id = ?').run(item.id);
+    db.prepare('UPDATE gallery_items SET deleted_at = ? WHERE id = ?').run(nowIso(), item.id);
     db.prepare('UPDATE generation_results SET saved_to_gallery = 0 WHERE id = ?').run(item.generation_result_id);
     res.json({ success: true });
   });
@@ -827,8 +867,9 @@ export function registerApiRoutes(app: Express) {
         `SELECT image_asset.storage_path, image_asset.file_name, image_asset.mime_type
          FROM gallery_items g
          JOIN generation_results r ON r.id = g.generation_result_id
-         JOIN file_assets image_asset ON image_asset.id = r.image_asset_id
-         WHERE g.id = ? AND g.user_id = ?`
+         JOIN generation_tasks t ON t.id = r.task_id
+         JOIN file_assets image_asset ON image_asset.id = r.image_asset_id AND image_asset.deleted_at IS NULL
+         WHERE g.id = ? AND g.user_id = ? AND g.deleted_at IS NULL AND t.deleted_at IS NULL`
       )
       .get(itemId, req.session.userId!) as { storage_path: string; file_name: string; mime_type: string } | undefined;
 

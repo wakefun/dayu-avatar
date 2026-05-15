@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { cwebpBin, dataRoot } from './config';
@@ -6,7 +7,7 @@ import { db, getAsset } from './database';
 import { readImageDimensions } from './image-utils';
 import { createSolidPng } from './mock-images';
 import type { AssetRow } from './types';
-import { createId, formatMonthPath, isMissingFileError, nowIso, toStaticUrl } from './utils';
+import { createId, formatMonthPath, nowIso, toStaticUrl } from './utils';
 
 export function createUploadedAsset(
   userId: string,
@@ -14,19 +15,32 @@ export function createUploadedAsset(
   file: Express.Multer.File,
   imageFile: { mimeType: string; extension: string }
 ): AssetRow {
+  const contentHash = hashBuffer(file.buffer);
+  const existing = findExistingAsset(userId, category, contentHash, imageFile.mimeType);
+  if (existing) {
+    return existing;
+  }
+
+  const duplicate = findExistingFile(userId, contentHash, imageFile.mimeType);
+  if (duplicate) {
+    return createAssetAlias(userId, category, duplicate);
+  }
+
   const id = createId('asset');
   const extension = imageFile.extension;
   const dimensions = readImageDimensions(file.buffer, imageFile.mimeType);
   const monthFolder = formatMonthPath();
-  const fileName = `${id}${extension}`;
+  const fileName = `${contentHash}${extension}`;
   const storagePath = path.join('uploads', category, monthFolder, fileName);
   const absolutePath = path.join(dataRoot, storagePath);
   fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
-  fs.writeFileSync(absolutePath, file.buffer);
+  if (!fs.existsSync(absolutePath)) {
+    fs.writeFileSync(absolutePath, file.buffer);
+  }
 
   db.prepare(
-    `INSERT INTO file_assets (id, user_id, category, storage_disk, storage_path, public_url, file_name, mime_type, width, height, byte_size, created_at)
-     VALUES (?, ?, ?, 'local', ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO file_assets (id, user_id, category, storage_disk, storage_path, public_url, file_name, mime_type, width, height, byte_size, content_hash, created_at)
+     VALUES (?, ?, ?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     userId,
@@ -37,7 +51,8 @@ export function createUploadedAsset(
     imageFile.mimeType,
     dimensions?.width ?? null,
     dimensions?.height ?? null,
-    file.size,
+    file.buffer.byteLength,
+    contentHash,
     nowIso()
   );
 
@@ -45,16 +60,30 @@ export function createUploadedAsset(
 }
 
 export function createSeedAsset(userId: string, category: 'personal_reference' | 'style_reference', name: string, rgb: [number, number, number]) {
+  const buffer = createSolidPng(512, 512, rgb);
+  const contentHash = hashBuffer(buffer);
+  const existing = findExistingAsset(userId, category, contentHash, 'image/png');
+  if (existing) {
+    return existing;
+  }
+
+  const duplicate = findExistingFile(userId, contentHash, 'image/png');
+  if (duplicate) {
+    return createAssetAlias(userId, category, duplicate, name);
+  }
+
   const id = createId('asset');
   const monthFolder = formatMonthPath();
-  const storagePath = path.join('uploads', category, monthFolder, `${id}.png`);
+  const storagePath = path.join('uploads', category, monthFolder, `${contentHash}.png`);
   const absolutePath = path.join(dataRoot, storagePath);
   fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
-  fs.writeFileSync(absolutePath, createSolidPng(512, 512, rgb));
+  if (!fs.existsSync(absolutePath)) {
+    fs.writeFileSync(absolutePath, buffer);
+  }
   db.prepare(
-    `INSERT INTO file_assets (id, user_id, category, storage_disk, storage_path, public_url, file_name, mime_type, width, height, byte_size, created_at)
-     VALUES (?, ?, ?, 'local', ?, ?, ?, 'image/png', 512, 512, ?, ?)`
-  ).run(id, userId, category, storagePath, toStaticUrl(`/${storagePath.replaceAll(path.sep, '/')}`), name, fs.statSync(absolutePath).size, nowIso());
+    `INSERT INTO file_assets (id, user_id, category, storage_disk, storage_path, public_url, file_name, mime_type, width, height, byte_size, content_hash, created_at)
+     VALUES (?, ?, ?, 'local', ?, ?, ?, 'image/png', 512, 512, ?, ?, ?)`
+  ).run(id, userId, category, storagePath, toStaticUrl(`/${storagePath.replaceAll(path.sep, '/')}`), name, buffer.byteLength, contentHash, nowIso());
   return getAsset(id)!;
 }
 
@@ -69,17 +98,30 @@ export function createBinaryGeneratedAsset(input: {
   height: number;
   fileNameSuffix: 'result' | 'thumb';
 }) {
+  const contentHash = hashBuffer(input.buffer);
+  const existing = findExistingAsset(input.userId, input.category, contentHash, input.mimeType);
+  if (existing) {
+    return existing;
+  }
+
+  const duplicate = findExistingFile(input.userId, contentHash, input.mimeType);
+  if (duplicate) {
+    return createAssetAlias(input.userId, input.category, duplicate);
+  }
+
   const id = createId('asset');
   const monthFolder = formatMonthPath();
-  const fileName = `${input.taskId}-${input.fileNameSuffix}${input.extension}`;
-  const storagePath = path.join('generated', monthFolder, input.taskId, fileName);
+  const fileName = `${contentHash}${input.extension}`;
+  const storagePath = path.join('generated', input.category, monthFolder, fileName);
   const absolutePath = path.join(dataRoot, storagePath);
   fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
-  fs.writeFileSync(absolutePath, input.buffer);
+  if (!fs.existsSync(absolutePath)) {
+    fs.writeFileSync(absolutePath, input.buffer);
+  }
 
   db.prepare(
-    `INSERT INTO file_assets (id, user_id, category, storage_disk, storage_path, public_url, file_name, mime_type, width, height, byte_size, created_at)
-     VALUES (?, ?, ?, 'local', ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO file_assets (id, user_id, category, storage_disk, storage_path, public_url, file_name, mime_type, width, height, byte_size, content_hash, created_at)
+     VALUES (?, ?, ?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     input.userId,
@@ -91,6 +133,7 @@ export function createBinaryGeneratedAsset(input: {
     input.width,
     input.height,
     input.buffer.byteLength,
+    contentHash,
     nowIso()
   );
 
@@ -98,14 +141,7 @@ export function createBinaryGeneratedAsset(input: {
 }
 
 export function deleteAsset(asset: AssetRow) {
-  try {
-    fs.unlinkSync(path.join(dataRoot, asset.storage_path));
-  } catch (error) {
-    if (!isMissingFileError(error)) {
-      throw error;
-    }
-  }
-  db.prepare('DELETE FROM file_assets WHERE id = ?').run(asset.id);
+  db.prepare('UPDATE file_assets SET deleted_at = ? WHERE id = ?').run(nowIso(), asset.id);
 }
 
 export function createWebpThumbnail(sourceStoragePath: string, width: number, height: number) {
@@ -113,6 +149,44 @@ export function createWebpThumbnail(sourceStoragePath: string, width: number, he
   return execFileSync(cwebpBin, ['-quiet', '-q', '88', '-resize', String(thumbnailSize.width), String(thumbnailSize.height), path.join(dataRoot, sourceStoragePath), '-o', '-'], {
     maxBuffer: 20 * 1024 * 1024,
   });
+}
+
+function hashBuffer(buffer: Buffer) {
+  return crypto.createHash('sha256').update(buffer).digest('hex');
+}
+
+function findExistingAsset(userId: string, category: AssetRow['category'], contentHash: string, mimeType: string) {
+  return db
+    .prepare('SELECT * FROM file_assets WHERE user_id = ? AND category = ? AND content_hash = ? AND mime_type = ? AND deleted_at IS NULL ORDER BY datetime(created_at) ASC LIMIT 1')
+    .get(userId, category, contentHash, mimeType) as AssetRow | undefined;
+}
+
+function findExistingFile(userId: string, contentHash: string, mimeType: string) {
+  return db
+    .prepare('SELECT * FROM file_assets WHERE user_id = ? AND content_hash = ? AND mime_type = ? AND deleted_at IS NULL ORDER BY datetime(created_at) ASC LIMIT 1')
+    .get(userId, contentHash, mimeType) as AssetRow | undefined;
+}
+
+function createAssetAlias(userId: string, category: AssetRow['category'], source: AssetRow, fileName = source.file_name) {
+  const id = createId('asset');
+  db.prepare(
+    `INSERT INTO file_assets (id, user_id, category, storage_disk, storage_path, public_url, file_name, mime_type, width, height, byte_size, content_hash, created_at)
+     VALUES (?, ?, ?, 'local', ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    id,
+    userId,
+    category,
+    source.storage_path,
+    source.public_url,
+    fileName,
+    source.mime_type,
+    source.width,
+    source.height,
+    source.byte_size,
+    source.content_hash,
+    nowIso()
+  );
+  return getAsset(id)!;
 }
 
 export function getThumbnailDimensions(width: number, height: number) {

@@ -21,6 +21,7 @@ export type Asset = {
   height: number | null;
   fileName: string;
   fileUrl: string;
+  contentHash: string | null;
   createdAt: string;
 };
 
@@ -67,6 +68,7 @@ export type GenerationResult = {
   thumbnailUrl: string | null;
   width: number | null;
   height: number | null;
+  contentHash: string | null;
   savedToGallery: boolean;
   createdAt: string;
 };
@@ -103,6 +105,8 @@ export type RecordItem = {
     thumbnailUrl: string | null;
     width: number | null;
     height: number | null;
+    contentHash: string | null;
+    savedToGallery: boolean;
     createdAt: string;
   } | null;
   errorMessage: string | null;
