@@ -1,0 +1,2 @@
+{"file":".trellis/workflow.md","reason":"Defines required Trellis task lifecycle and context curation flow for this maintenance task."}
+{"file":".claude/skills/trellis-meta/references/local-architecture/overview.md","reason":"Defines local Trellis architecture and update/customization boundaries."}
