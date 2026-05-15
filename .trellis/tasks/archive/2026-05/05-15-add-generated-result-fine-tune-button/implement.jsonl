@@ -1,0 +1,8 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend spec index for result-page UI changes"}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Result page button/form styling and interaction contracts"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Typed API payload contracts for generation tasks/results"}
+{"file":".trellis/spec/backend/index.md","reason":"Backend spec index for route and service changes"}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Task/result/asset persistence and category contracts"}
+{"file":".trellis/spec/backend/error-handling.md","reason":"REST validation and error envelope contracts"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Feature crosses result UI, API route, persistence, and generation service"}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Reuse existing task creation/result mapping patterns"}

@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Verify result-page UI behavior and mobile/action conventions"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Verify frontend API contract alignment"}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Verify persistence, ownership, result asset, and task contracts"}
+{"file":".trellis/spec/backend/error-handling.md","reason":"Verify API errors use project envelope and validation semantics"}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Verify end-to-end data flow across UI/API/database"}
