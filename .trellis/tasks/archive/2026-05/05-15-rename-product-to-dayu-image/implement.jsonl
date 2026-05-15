@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Frontend PWA metadata and route/page copy conventions for the rename."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Frontend component and user-facing UI copy conventions for the rename."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Batch text changes require search verification for missed old copy."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"The rename touches backend progress/status text consumed by frontend UI."}

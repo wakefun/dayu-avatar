@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/directory-structure.md","reason":"Check PWA manifest/index metadata changes and route title copy."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Check user-facing UI copy remains consistent with existing component patterns."}
+{"file":".trellis/spec/guides/code-reuse-thinking-guide.md","reason":"Check grep/diff verification covered all repeated old product terms."}
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Check backend and frontend progress/status text stay consistent."}
