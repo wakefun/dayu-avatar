@@ -1,6 +1,7 @@
 import type {
   Asset,
   CreateGenerationTaskResponse,
+  FineTuneTaskResponse,
   GalleryItem,
   GenerationResult,
   GenerationTask,
@@ -75,6 +76,8 @@ export const api = {
       outputFormat: string;
     };
   }) => request<CreateGenerationTaskResponse>('/api/generation-tasks', { method: 'POST', body: JSON.stringify(body) }),
+  fineTuneTask: (taskId: string, prompt: string) =>
+    request<FineTuneTaskResponse>(`/api/generation-tasks/${taskId}/fine-tune`, { method: 'POST', body: JSON.stringify({ prompt }) }),
   getTask: (taskId: string) => request<{ task: GenerationTask }>(`/api/generation-tasks/${taskId}`),
   streamTask: (taskId: string) => new EventSource(`/api/generation-tasks/${encodeURIComponent(taskId)}/events`),
   getTaskProgress: (taskId: string) =>

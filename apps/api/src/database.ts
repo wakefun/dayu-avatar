@@ -109,6 +109,7 @@ export function initSchema() {
   ensureColumn('generation_tasks', 'summary', 'TEXT');
   ensureColumn('generation_tasks', 'personal_reference_asset_ids_json', 'TEXT');
   ensureColumn('generation_tasks', 'style_reference_asset_ids_json', 'TEXT');
+  ensureColumn('generation_tasks', 'source_task_id', 'TEXT');
   ensureColumn('generation_tasks', 'deleted_at', 'TEXT');
   ensureColumn('generation_results', 'thumbnail_asset_id', 'TEXT');
   ensureColumn('gallery_items', 'deleted_at', 'TEXT');

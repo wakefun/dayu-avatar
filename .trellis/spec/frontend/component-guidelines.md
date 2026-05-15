@@ -83,6 +83,7 @@ import {
 - Gallery cards show a pink flower marker only for favorited items.
 - Gallery actions (favorite, download, remove-from-gallery, set-as-avatar, generated time, jump-to-record) belong in the fullscreen preview footer, not inside the masonry card itself.
 - Result-page image display should preserve original width/height with `object-fit: contain`; do not crop to a fixed portrait frame.
+- Result-page fine-tune is a local inline form: a `微调` button reveals a textarea plus confirm/cancel controls, blocks empty text before API calls, and navigates to the returned loading route after successful task creation.
 - Result-page generation parameters should show available `personalReferenceAssets` and `styleReferenceAssets` as labeled source/reference thumbnails before the parameter rows; thumbnails should reuse fullscreen preview behavior and must not require extra API calls.
 - Sidebar install action is a UI affordance that calls the browser install prompt when available and otherwise remains harmless.
 - Sidebar install action renders only when the app is not already installed and `beforeinstallprompt` has provided an install prompt.
@@ -111,6 +112,8 @@ import {
 - Fullscreen preview dialog must have an accessible label, focus an explicit close control on open, and close on Escape.
 - Confirmation dialogs for destructive record/gallery/cancel actions must focus a safe cancel/keep button on open and close on Escape.
 - Result image styling must use real image dimensions when available; hard-coded aspect ratio reintroduces cropping.
+- Result-page fine-tune empty input -> show a concise inline Chinese validation message and do not create a task.
+- Result-page fine-tune success -> navigate to `/generate/loading/:newTaskId`; do not also mutate the current result view.
 - Result-page reference thumbnails should handle nullable asset dimensions and stay within the mobile viewport without horizontal document overflow.
 - Gallery masonry cards should not add captions or inline action rows back into the grid.
 
@@ -120,6 +123,7 @@ import {
 - Good: “自定义需求” remains a plain textarea; typed user requirements are sent as `prompt` without auto-inserting tag snippets.
 - Good: `UploadCard` owns the square 1/2/3-image layout, add-more overlay, remove buttons, and fullscreen-preview callbacks for both personal and style references.
 - Good: `HistoryCard` exposes a single bottom “再次生成” action while passing prefill-ready task data back to the home page.
+- Good: result-page “微调” stays a distinct inline action from “重新生成”; “重新生成” still navigates home with editable prefilled state.
 - Good: `GalleryCard` is just an image button plus optional favorite flower marker; fullscreen actions live in the shared lightbox footer.
 - Good: gallery "移出图库" and record/task destructive actions use custom app dialogs, not `window.confirm`.
 - Good: after `await api.deleteRecord(item.id)` or `await api.cancelTask(item.id)`, add `item.id` to a local tombstone set before merging any streamed records payloads.

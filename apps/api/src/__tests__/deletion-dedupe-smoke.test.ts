@@ -27,6 +27,17 @@ type UploadPayload = {
 type CreateTaskPayload = {
   task: {
     id: string;
+    prompt: string;
+    personalReferenceAssetId: string;
+    personalReferenceAssetIds: string[];
+    styleReferenceAssetIds: string[];
+    generationParams: {
+      model: string;
+      quality: string;
+      size: string;
+      outputFormat: string;
+    };
+    sourceTaskId: string | null;
   };
 };
 
@@ -99,6 +110,14 @@ test('soft deletion, cancellation, gallery removal, and upload dedupe stay consi
   assert.equal(secondUpload.asset.contentHash, firstUpload.asset.contentHash);
 
   const activeTask = await createTask(firstUpload.asset.id, 'cancel me');
+  const activeFineTune = await fetchWithCookie(`/api/generation-tasks/${activeTask.task.id}/fine-tune`, {
+    method: 'POST',
+    body: JSON.stringify({ prompt: 'adjust active task' }),
+  });
+  const activeFineTunePayload = (await activeFineTune.json()) as { error: { code: string; message: string } };
+  assert.equal(activeFineTune.status, 409);
+  assert.equal(activeFineTunePayload.error.code, 'INVALID_STATE');
+
   await requestJson<{ success: true }>(`/api/generation-tasks/${activeTask.task.id}/cancel`, { method: 'POST', body: JSON.stringify({}) });
   const canceledLookup = await fetchWithCookie(`/api/generation-tasks/${activeTask.task.id}`);
   assert.equal(canceledLookup.status, 404);
@@ -113,6 +132,26 @@ test('soft deletion, cancellation, gallery removal, and upload dedupe stay consi
   assert.equal(completedRecord?.status, 'completed');
   assert.ok(completedRecord.result?.id);
   assert.ok(completedRecord.result.contentHash);
+
+  const emptyFineTune = await fetchWithCookie(`/api/generation-tasks/${completedTask.task.id}/fine-tune`, { method: 'POST', body: JSON.stringify({ prompt: '   ' }) });
+  const emptyFineTunePayload = (await emptyFineTune.json()) as { error: { code: string; message: string } };
+  assert.equal(emptyFineTune.status, 400);
+  assert.equal(emptyFineTunePayload.error.code, 'VALIDATION_ERROR');
+
+  const fineTune = await requestJson<CreateTaskPayload>(`/api/generation-tasks/${completedTask.task.id}/fine-tune`, {
+    method: 'POST',
+    body: JSON.stringify({ prompt: 'make the light warmer' }),
+  });
+  assert.equal(fineTune.task.prompt, 'make the light warmer');
+  assert.equal(fineTune.task.sourceTaskId, completedTask.task.id);
+  assert.deepEqual(fineTune.task.styleReferenceAssetIds, []);
+  assert.equal(fineTune.task.personalReferenceAssetIds.length, 1);
+  assert.notEqual(fineTune.task.personalReferenceAssetIds[0], firstUpload.asset.id);
+  assert.equal(fineTune.task.personalReferenceAssetId, fineTune.task.personalReferenceAssetIds[0]);
+  assert.equal(fineTune.task.generationParams.size, completedTask.task.generationParams.size);
+  assert.equal(fineTune.task.generationParams.model, completedTask.task.generationParams.model);
+  assert.equal(fineTune.task.generationParams.quality, completedTask.task.generationParams.quality);
+  assert.equal(fineTune.task.generationParams.outputFormat, completedTask.task.generationParams.outputFormat);
 
   const galleryCreate = await requestJson<{ item: { id: string; taskId: string } }>('/api/gallery-items', {
     method: 'POST',

@@ -494,6 +494,71 @@ export function registerApiRoutes(app: Express) {
     }
   });
 
+  app.post('/api/generation-tasks/:taskId/fine-tune', requireAuth, async (req, res, next) => {
+    try {
+      const taskId = getRouteParam(req.params.taskId);
+      const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
+
+      if (!prompt) {
+        sendError(res, 400, 'VALIDATION_ERROR', '请填写微调需求');
+        return;
+      }
+
+      const sourceTask = await syncAndGetOwnedTask(req.session.userId!, taskId);
+      if (!sourceTask) {
+        sendError(res, 404, 'NOT_FOUND', '任务不存在');
+        return;
+      }
+
+      if (sourceTask.status !== 'completed') {
+        sendError(res, 409, 'INVALID_STATE', '只能微调已完成的任务');
+        return;
+      }
+
+      const result = getResultByTaskId(sourceTask.id);
+      if (!result) {
+        sendError(res, 404, 'NOT_FOUND', '生成结果不存在');
+        return;
+      }
+
+      const imageAsset = getOwnedAsset(req.session.userId!, result.image_asset_id);
+      if (!imageAsset) {
+        sendError(res, 404, 'NOT_FOUND', '生成结果图片不可用');
+        return;
+      }
+
+      if (imageAsset.category !== 'generated_result') {
+        sendError(res, 409, 'INVALID_STATE', '生成结果图片不可用');
+        return;
+      }
+
+      const task = createGenerationTask({
+        userId: sourceTask.user_id,
+        prompt,
+        styleTags: [],
+        summary: buildFallbackTaskSummary({
+          prompt,
+          personalReferenceCount: 1,
+          styleReferenceCount: 0,
+        }),
+        personalReferenceAssetId: imageAsset.id,
+        styleReferenceAssetId: null,
+        personalReferenceAssetIds: [imageAsset.id],
+        styleReferenceAssetIds: [],
+        model: sourceTask.model || defaultImageModel,
+        quality: sourceTask.quality || defaultImageQuality,
+        size: sourceTask.size || normalizeOpenAiSize('1024x1536'),
+        outputFormat: sourceTask.output_format || 'png',
+        sourceTaskId: sourceTask.id,
+      });
+
+      void startGenerationRun(task.id);
+      res.status(201).json({ task: mapTask(task) });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post('/api/generation-tasks/:taskId/cancel', requireAuth, (req, res) => {
     const taskId = getRouteParam(req.params.taskId);
     const task = getOwnedTask(req.session.userId!, taskId);

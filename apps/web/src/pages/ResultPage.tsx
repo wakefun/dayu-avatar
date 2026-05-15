@@ -19,6 +19,10 @@ export function ResultPage() {
   const [result, setResult] = useState<GenerationResult | null>(null);
   const [savedItem, setSavedItem] = useState<GalleryItem | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [fineTuneOpen, setFineTuneOpen] = useState(false);
+  const [fineTunePrompt, setFineTunePrompt] = useState('');
+  const [fineTuneError, setFineTuneError] = useState<string | null>(null);
+  const [fineTuneSubmitting, setFineTuneSubmitting] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [referencePreview, setReferencePreview] = useState<ReferencePreview | null>(null);
 
@@ -28,6 +32,10 @@ export function ResultPage() {
         setError(null);
         setResult(null);
         setSavedItem(null);
+        setFineTuneOpen(false);
+        setFineTunePrompt('');
+        setFineTuneError(null);
+        setFineTuneSubmitting(false);
         const taskResponse = await api.getTask(taskId);
         setTask(taskResponse.task);
 
@@ -58,6 +66,30 @@ export function ResultPage() {
   const personalReferenceAssets = task?.personalReferenceAssets ?? [];
   const styleReferenceAssets = task?.styleReferenceAssets ?? [];
   const hasReferenceAssets = personalReferenceAssets.length > 0 || styleReferenceAssets.length > 0;
+  const canFineTune = task?.status === 'completed' && Boolean(result?.imageUrl);
+
+  const handleFineTuneSubmit = async () => {
+    if (!task || !canFineTune || fineTuneSubmitting) {
+      return;
+    }
+
+    const prompt = fineTunePrompt.trim();
+    if (!prompt) {
+      setFineTuneError('请填写微调需求');
+      return;
+    }
+
+    try {
+      setFineTuneSubmitting(true);
+      setFineTuneError(null);
+      const response = await api.fineTuneTask(task.id, prompt);
+      navigate(`/generate/loading/${response.task.id}`);
+    } catch (requestError) {
+      setFineTuneError(requestError instanceof Error ? requestError.message : '微调任务创建失败');
+    } finally {
+      setFineTuneSubmitting(false);
+    }
+  };
 
   return (
     <div className={pageStackClass}>
@@ -123,6 +155,47 @@ export function ResultPage() {
           >
             重新生成
           </button>
+          {canFineTune ? (
+            fineTuneOpen ? (
+              <div className="grid gap-2.5 rounded-[22px] border border-white/80 bg-white/55 p-3.5 shadow-[0_8px_24px_rgba(71,55,45,0.08)]">
+                <label className="grid gap-2 text-sm font-bold text-[#2f2724]">
+                  微调需求
+                  <textarea
+                    className="min-h-24 resize-none rounded-[18px] border border-[#d8c7bc] bg-white/80 px-3.5 py-3 text-sm font-normal leading-6 text-[#2f2724] outline-none transition focus:border-[#c97881] focus:ring-2 focus:ring-[#f4ccd1]"
+                    value={fineTunePrompt}
+                    onChange={(event) => {
+                      setFineTunePrompt(event.target.value);
+                      if (fineTuneError) {
+                        setFineTuneError(null);
+                      }
+                    }}
+                    placeholder="例如：把背景换成浅色花园，保留人物姿态"
+                    disabled={fineTuneSubmitting}
+                  />
+                </label>
+                {fineTuneError ? <div className="text-sm text-[#b36f67]">{fineTuneError}</div> : null}
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button type="button" className={secondaryButtonClass} disabled={fineTuneSubmitting} onClick={() => {
+                    setFineTuneOpen(false);
+                    setFineTunePrompt('');
+                    setFineTuneError(null);
+                  }}>
+                    取消
+                  </button>
+                  <button type="button" className={primaryButtonClass} disabled={fineTuneSubmitting} onClick={handleFineTuneSubmit}>
+                    {fineTuneSubmitting ? '创建中…' : '确认微调'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button type="button" className={secondaryButtonClass} onClick={() => {
+                setFineTuneOpen(true);
+                setFineTuneError(null);
+              }}>
+                微调
+              </button>
+            )
+          ) : null}
           <button type="button" className={secondaryButtonClass} onClick={() => navigate('/gallery')}>
             前往图库
           </button>

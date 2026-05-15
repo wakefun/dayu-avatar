@@ -61,6 +61,10 @@ export type CreateGenerationTaskResponse = {
   tasks?: GenerationTask[];
 };
 
+export type FineTuneTaskResponse = {
+  task: GenerationTask;
+};
+
 export type GenerationResult = {
   id: string;
   taskId: string;

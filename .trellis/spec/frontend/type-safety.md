@@ -53,6 +53,18 @@ api.createTask({
 });
 ```
 
+- Generated-result fine-tune contract:
+
+```ts
+api.fineTuneTask(taskId, prompt);
+```
+
+Response shape:
+
+```ts
+type FineTuneTaskResponse = { task: GenerationTask };
+```
+
 - `styleReferenceAnalysis` is not part of the frontend task-creation payload for the Darkroom MVP.
 ```
 
@@ -69,6 +81,7 @@ api.createTask({
 - Asset/result/record image payloads carry `contentHash: string | null`; UI can display/debug it but must not reconstruct storage paths from it.
 - Record result payloads include `savedToGallery` so delete confirmation can warn only when deleting a record will also remove a visible gallery entry.
 - Result routes must fetch task status before fetching `/result`; queued/processing tasks redirect to loading, and failed/canceled tasks show terminal copy instead of claiming a result is ready.
+- Result-page fine-tune calls `api.fineTuneTask(taskId, prompt)` only after the user enters non-empty adjustment text. It does not send generated asset ids; the backend derives the source image from the result.
 - `api.cancelTask(taskId)` posts to `/api/generation-tasks/:taskId/cancel`; after success, callers navigate away or filter the task locally because normal record/task APIs hide it.
 - Gallery items must carry `width` and `height` so masonry cards and fullscreen preview preserve image aspect ratio.
 - Gallery preview actions include a record-detail jump using `taskId`, and gallery remove calls `api.deleteGallery(itemId)` through an app-level confirmation.
@@ -81,6 +94,8 @@ api.createTask({
 - Backend returns only legacy single-id fields for old data -> frontend should rely on array fields already normalized by the API and avoid reconstructing arrays itself.
 - Result route opened for a queued or processing task -> redirect to `/generate/loading/:taskId` before requesting the result endpoint.
 - Result route opened for a failed or canceled task -> show terminal error/canceled copy and do not call `/api/generation-tasks/:taskId/result`.
+- Fine-tune submitted with empty adjustment text -> block before API call and show a concise Chinese validation message.
+- Fine-tune API succeeds -> navigate to `/generate/loading/:newTaskId` from the returned `task.id`.
 - Canceled task disappears from records after cancel -> keep a local tombstone/filter so SSE or pagination cannot re-add it before backend filters catch up.
 - Deleting a completed record with `result.savedToGallery` -> confirmation copy must mention the related gallery entry will also be removed.
 - `setAvatarFromGallery` fails -> keep existing avatar UI until a successful response arrives.
@@ -92,7 +107,9 @@ api.createTask({
 - Good: `RecordsPage` consumes `RecordsResponse`, renders queued/processing/completed/failed items together, and paginates with `nextCursor`; canceled tasks are hidden after cancel.
 - Good: `GalleryPage` uses server-provided image dimensions rather than hard-coded portrait ratios.
 - Good: gallery preview offers "查看记录" from `taskId` and "移出图库" through a confirmation dialog, not inline card controls.
+- Good: result-page fine-tune sends only the adjustment prompt and source task id through `api.fineTuneTask`, then relies on the backend response for navigation.
 - Base: image preview components accept nullable dimensions/hash values and degrade to CSS defaults when missing.
+- Bad: exposing or reconstructing generated result asset ids in result-page state to create a fine-tune task.
 - Bad: building queue/history summary text from raw prompt in the component layer.
 - Bad: duplicating API payload shapes in each page component instead of importing shared types.
 
@@ -102,6 +119,7 @@ api.createTask({
 - Add assertions that task creation includes array-based source/reference asset ids and never includes `styleReferenceAnalysis`.
 - Add assertions that `auto` ratio ignores source image dimensions, snaps the first reference image ratio to the nearest supported ratio, and falls back to `3:4` without reference dimensions.
 - Add assertions that gallery/result/reference images still render when width/height are null.
+- Add assertions that result-page fine-tune blocks empty text, calls `api.fineTuneTask` for valid text, and navigates to the returned loading route.
 - Add assertions that cancel task, delete record, and remove gallery call typed API helpers and keep rows hidden after stream/list refresh.
 - Add assertions that completed-record delete warning appears only when `savedToGallery` is true.
 - Add assertions that avatar updates refresh `user.avatarUrl` from the API response.
@@ -127,6 +145,23 @@ api.createTask({
   personalReferenceAssetIds: personalAssets.map((asset) => asset.id),
   styleReferenceAssetIds: styleAssets.map((asset) => asset.id),
 });
+```
+
+#### Wrong
+
+```ts
+api.createTask({
+  prompt: fineTunePrompt,
+  personalReferenceAssetIds: [result.imageAssetId],
+  styleReferenceAssetIds: [],
+});
+```
+
+#### Correct
+
+```ts
+const response = await api.fineTuneTask(task.id, fineTunePrompt.trim());
+navigate(`/generate/loading/${response.task.id}`);
 ```
 
 #### Wrong
