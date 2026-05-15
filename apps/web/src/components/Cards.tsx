@@ -11,7 +11,7 @@ export function GalleryCard({ item, onOpen }: { item: GalleryItem; onOpen: (item
       >
         <img
           src={item.thumbnailUrl ?? item.imageUrl}
-          alt="已保存暗房作品"
+          alt="已保存图片作品"
           className="block h-auto w-full object-cover transition duration-500 hover:scale-[1.025]"
           style={item.width && item.height ? { aspectRatio: `${item.width} / ${item.height}` } : undefined}
         />

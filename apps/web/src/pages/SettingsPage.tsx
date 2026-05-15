@@ -35,7 +35,7 @@ export function SettingsPage({ user, session, onLogout }: SettingsPageProps) {
         </div>
         <div className={softCardClass}>
           <strong className="text-[15px] text-[#2f2724]">应用信息</strong>
-          <p className="mt-2 text-sm leading-7 text-[#6b5f59]">大宇暗房会根据你的原图、参考图和自定义需求，生成贴近目标风格、场景与画风的图片作品。你可以保存喜欢的结果到图库，也可以把作品设置为当前头像。</p>
+          <p className="mt-2 text-sm leading-7 text-[#6b5f59]">大宇图片会根据你的原图、参考图和自定义需求，生成贴近目标风格、场景与画风的图片作品。你可以保存喜欢的结果到图库，也可以把作品设置为当前头像。</p>
         </div>
         <button
           type="button"

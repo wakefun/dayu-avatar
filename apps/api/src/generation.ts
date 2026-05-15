@@ -179,7 +179,7 @@ export async function syncTask(taskId: string) {
     { max: 1600, status: 'queued' as const, percent: 8, step: '排队中' },
     { max: 3600, status: 'processing' as const, percent: 24, step: '理解创作需求' },
     { max: 5600, status: 'processing' as const, percent: 48, step: '规划生图提示词' },
-    { max: 7600, status: 'processing' as const, percent: 72, step: '生成暗房作品' },
+    { max: 7600, status: 'processing' as const, percent: 72, step: '生成图片作品' },
     { max: 9600, status: 'processing' as const, percent: 90, step: '高清细化中' },
   ];
 

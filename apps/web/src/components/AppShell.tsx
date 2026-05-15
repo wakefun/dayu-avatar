@@ -15,7 +15,7 @@ type ShellProps = {
 };
 
 const navItems = [
-  { to: '/', label: '大宇暗房' },
+  { to: '/', label: '大宇图片' },
   { to: '/records', label: '我的记录' },
   { to: '/gallery', label: '我的图库' },
   { to: '/settings', label: '账户设置' },
@@ -56,7 +56,7 @@ export function AppShell({
         </button>
 
         <div className="min-w-0 text-center">
-          <div className="text-center text-[13px] tracking-[0.02em] text-[#8a7c74]">Dayu Darkroom</div>
+          <div className="text-center text-[13px] tracking-[0.02em] text-[#8a7c74]">Dayu Images</div>
           <h1 className="truncate font-serif text-[28px] font-semibold text-[#2f2724]">{title}</h1>
         </div>
 

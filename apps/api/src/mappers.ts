@@ -220,12 +220,12 @@ export function mapSessionSummary(sessionId: string, sessionData: session.Sessio
 
 export function taskProgressMessage(task: TaskRow) {
   if (task.status === 'completed') {
-    return '暗房作品已完成';
+    return '图片作品已完成';
   }
   if (task.status === 'failed') {
-    return '暗房生成失败';
+    return '图片生成失败';
   }
-  return '暗房生成进行中';
+  return '图片生成进行中';
 }
 
 export function parseStoredStyleTags(styleTagsJson: string) {

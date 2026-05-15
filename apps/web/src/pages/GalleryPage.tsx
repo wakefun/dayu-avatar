@@ -50,8 +50,8 @@ export function GalleryPage({ onUserUpdated }: GalleryPageProps) {
       <PageSection title="我的图库" subtitle="这里只展示你主动保存的最终图片作品。">
         {items.length === 0 ? (
           <div className={`${softCardClass} grid gap-2.5`}>
-            <strong className="text-[15px] text-[#2f2724]">还没有收藏的暗房作品</strong>
-            <p className="m-0 text-sm leading-6 text-[#6b5f59]">回到大宇暗房，完成第一张作品后即可保存到这里。</p>
+            <strong className="text-[15px] text-[#2f2724]">还没有收藏的图片作品</strong>
+            <p className="m-0 text-sm leading-6 text-[#6b5f59]">回到大宇图片，完成第一张作品后即可保存到这里。</p>
             <button type="button" className={secondaryButtonClass} onClick={() => navigate('/')}>
               去生成第一个作品
             </button>
@@ -70,7 +70,7 @@ export function GalleryPage({ onUserUpdated }: GalleryPageProps) {
           activeItem
             ? {
                 src: activeItem.thumbnailUrl ?? activeItem.imageUrl,
-                alt: '已保存暗房作品',
+                alt: '已保存图片作品',
                 width: activeItem.width,
                 height: activeItem.height,
                 meta: `生成时间 ${new Date(activeItem.savedAt).toLocaleString()}`,

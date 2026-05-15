@@ -5,7 +5,7 @@ import { api } from '../lib/api';
 import type { TaskStreamPayload } from '../lib/types';
 import { chipButtonClass, cx, pageStackClass, primaryButtonClass, secondaryButtonClass } from '../components/ui';
 
-const steps = ['理解创作需求', '规划生图提示词', '生成暗房作品', '高清细化中'];
+const steps = ['理解创作需求', '规划生图提示词', '生成图片作品', '高清细化中'];
 
 export function LoadingPage() {
   const { taskId = '' } = useParams();

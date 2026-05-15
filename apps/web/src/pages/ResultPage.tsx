@@ -129,7 +129,7 @@ export function ResultPage() {
         </div>
       </PageSection>
 
-      <PageSection title="生成参数" subtitle="查看本次暗房生成所使用的需求、参考图与基础参数。">
+      <PageSection title="生成参数" subtitle="查看本次图片生成所使用的需求、参考图与基础参数。">
         {hasReferenceAssets ? (
           <div className="grid min-w-0 gap-3 border-b border-[#807269]/10 pb-3.5">
             {personalReferenceAssets.length > 0 ? (
