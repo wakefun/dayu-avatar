@@ -237,3 +237,36 @@ Added source and style reference thumbnails to the result page generation-parame
 ### Next Steps
 
 - None - task complete
+
+
+## Session 8: Maintain repository after Trellis update
+
+**Date**: 2026-05-15
+**Task**: Maintain repository after Trellis update
+**Branch**: `main`
+
+### Summary
+
+Updated local Trellis runtime from 0.5.13 to 0.5.15, tightened task archive auto-commit path handling to avoid sweeping unrelated task or staged work into archive commits, validated Trellis task context, lint, and typecheck.
+
+### Main Changes
+
+(Add details)
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `d3151b0` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
